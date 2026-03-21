@@ -1,0 +1,34 @@
+.tv-cinema {
+    --cinema-text: #edf3f7;
+    --cinema-muted: rgba(218, 230, 236, 0.74);
+}
+
+.tv-cinema .movies-cinema-bg {
+    background:
+        radial-gradient(circle at 68% 17%, rgba(var(--feature-rgb), 0.24), transparent 44%),
+        radial-gradient(circle at 20% 76%, rgba(var(--feature-rgb), 0.16), transparent 50%),
+        linear-gradient(180deg, #040608 0%, #040608 45%, #020304 100%);
+}
+
+.tv-cinema .movies-cinema-header-tag,
+.tv-cinema .movies-cinema-kicker,
+.tv-cinema .movies-cinema-featured-meta span {
+    color: rgba(220, 235, 246, 0.8);
+}
+
+.tv-cinema .movies-cinema-btn-primary {
+    background: linear-gradient(140deg, rgba(var(--feature-rgb), 0.86), rgba(var(--feature-rgb), 0.54));
+    box-shadow: 0 10px 30px rgba(var(--feature-rgb), 0.34);
+}
+
+.tv-cinema .movies-cinema-row h2 {
+    color: #eaf1f7;
+}
+
+.tv-cinema .movies-cinema-row h2::after {
+    background: linear-gradient(90deg, transparent 0%, rgba(213, 233, 248, 0.58) 50%, transparent 100%);
+}
+
+.tv-cinema .movies-cinema-row h2::before {
+    background: rgba(209, 233, 252, 0.7);
+}

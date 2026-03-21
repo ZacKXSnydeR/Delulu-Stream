@@ -1,0 +1,266 @@
+/* ========================================
+   PREMIUM LOADER - Full Page Design
+   Matches the app's details page style
+======================================== */
+
+.premium-loader {
+    position: absolute;
+    inset: 0;
+    background: #0a0a0a;
+    z-index: 1;
+    overflow: hidden;
+}
+
+/* Full backdrop background */
+.premium-loader-backdrop {
+    position: absolute;
+    inset: 0;
+    background-size: cover;
+    background-position: center top;
+    opacity: 0.6;
+}
+
+/* Left gradient - for text readability */
+.premium-loader-gradient-left {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg,
+            rgba(0, 0, 0, 0.95) 0%,
+            rgba(0, 0, 0, 0.7) 30%,
+            rgba(0, 0, 0, 0.3) 60%,
+            transparent 100%);
+}
+
+/* Bottom gradient */
+.premium-loader-gradient-bottom {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to top,
+            rgba(0, 0, 0, 0.9) 0%,
+            rgba(0, 0, 0, 0.4) 30%,
+            transparent 60%);
+}
+
+/* Main layout */
+.premium-loader-layout {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    height: 100%;
+    padding: 60px 80px 80px;
+    box-sizing: border-box;
+    animation: fadeIn 0.5s ease-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/* Left side - Title & meta */
+.premium-loader-left {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    max-width: 500px;
+}
+
+.premium-loader-title {
+    margin: 0;
+    font-size: 3rem;
+    font-weight: 700;
+    color: #fff;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+    text-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+.premium-loader-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 1rem;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.premium-loader-meta .meta-dot {
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.premium-loader-cancel {
+    align-self: flex-start;
+    margin-top: 16px;
+    padding: 12px 28px;
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.premium-loader-cancel:hover {
+    border-color: rgba(255, 255, 255, 0.4);
+    color: #fff;
+    background: rgba(255, 255, 255, 0.05);
+}
+
+/* Right side - Glass card */
+.premium-loader-card {
+    width: 320px;
+    background: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.loader-card-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.loader-card-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.loader-card-content {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.loader-card-text {
+    margin: 0;
+    font-size: 0.9rem;
+    line-height: 1.6;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+/* Status with spinner */
+.loader-card-status {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 16px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+}
+
+.loader-spinner {
+    width: 28px;
+    height: 28px;
+    flex-shrink: 0;
+}
+
+.loader-spinner svg {
+    width: 100%;
+    height: 100%;
+    animation: spin 1.2s linear infinite;
+    will-change: transform;
+}
+
+.loader-spinner circle {
+    stroke-dasharray: 90;
+    stroke-dashoffset: 30;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.loader-status-text {
+    margin: 0;
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.9);
+    transition: opacity 0.3s ease;
+}
+
+.loader-status-text.fade {
+    opacity: 0;
+}
+
+/* Progress dots */
+.loader-card-dots {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+}
+
+.loader-card-dots .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.2);
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+.loader-card-dots .dot:nth-child(1) {
+    animation-delay: 0s;
+}
+
+.loader-card-dots .dot:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.loader-card-dots .dot:nth-child(3) {
+    animation-delay: 0.4s;
+}
+
+@keyframes pulse {
+
+    0%,
+    100% {
+        background: rgba(255, 255, 255, 0.2);
+        transform: scale(1);
+    }
+
+    50% {
+        background: linear-gradient(135deg, #a855f7, #6366f1);
+        transform: scale(1.2);
+    }
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+    .premium-loader-layout {
+        flex-direction: column;
+        align-items: flex-start;
+        justify-content: flex-end;
+        padding: 40px 32px 60px;
+        gap: 32px;
+    }
+
+    .premium-loader-left {
+        max-width: 100%;
+    }
+
+    .premium-loader-title {
+        font-size: 2rem;
+    }
+
+    .premium-loader-card {
+        width: 100%;
+        max-width: 360px;
+    }
+}

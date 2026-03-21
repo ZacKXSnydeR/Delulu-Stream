@@ -1,0 +1,440 @@
+/* =========================
+   RANDOM PAGE - 3D Discovery
+========================= */
+.random-page {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    background: var(--color-bg-primary);
+}
+
+/* Header - Liquid Glass Island (Bottom Centered with Flexbox) */
+.random-header {
+    position: absolute;
+    bottom: 40px;
+    left: 0;
+    right: 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+}
+
+.random-header-island {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding: 14px 28px;
+    border-radius: 50px;
+    pointer-events: auto;
+
+    /* Liquid Glass Effect */
+    background: linear-gradient(135deg,
+            rgba(255, 255, 255, 0.12) 0%,
+            rgba(255, 255, 255, 0.06) 50%,
+            rgba(255, 255, 255, 0.03) 100%);
+    backdrop-filter: blur(40px) saturate(180%);
+    -webkit-backdrop-filter: blur(40px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    box-shadow:
+        0 8px 32px rgba(0, 0, 0, 0.4),
+        0 0 0 1px rgba(255, 255, 255, 0.05) inset,
+        0 2px 4px rgba(255, 255, 255, 0.1) inset;
+}
+
+/* Liquid glass inner glow */
+.random-header-island::before {
+    content: '';
+    position: absolute;
+    inset: 1px;
+    border-radius: 50px;
+    background: linear-gradient(180deg,
+            rgba(255, 255, 255, 0.15) 0%,
+            transparent 40%);
+    pointer-events: none;
+}
+
+.random-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.95);
+    padding: 0 12px;
+    letter-spacing: 0.02em;
+}
+
+/* Buttons - Island style */
+.random-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border: none;
+    border-radius: 50px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+    z-index: 1;
+}
+
+.random-btn-ghost {
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.85);
+}
+
+.random-btn-ghost:hover {
+    background: rgba(255, 255, 255, 0.18);
+    color: #fff;
+}
+
+.random-btn-primary {
+    background: linear-gradient(135deg, #e50914 0%, #ff4d4d 100%);
+    color: #fff;
+    box-shadow: 0 4px 20px rgba(229, 9, 20, 0.4);
+}
+
+.random-btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 30px rgba(229, 9, 20, 0.5);
+}
+
+.random-btn-secondary {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(10px);
+}
+
+.random-btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.4);
+}
+
+.random-btn-icon {
+    width: 48px;
+    height: 48px;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #fff;
+}
+
+.random-btn-icon:hover {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+/* Loading */
+.random-loading {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    background: var(--color-bg-primary);
+    color: var(--color-text-muted);
+}
+
+.spin {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Modal Backdrop */
+.random-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(10px);
+}
+
+/* Modal Container */
+.random-modal-container {
+    position: fixed;
+    inset: 0;
+    z-index: 101;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    pointer-events: none;
+}
+
+.random-modal {
+    position: relative;
+    width: 100%;
+    max-width: 900px;
+    max-height: 90vh;
+    overflow: hidden;
+    border-radius: 24px;
+    pointer-events: auto;
+    background: linear-gradient(145deg, rgba(20, 20, 25, 0.98) 0%, rgba(10, 10, 15, 0.99) 100%);
+    box-shadow:
+        0 30px 100px -20px rgba(0, 0, 0, 0.9),
+        0 0 80px rgba(0, 0, 0, 0.5),
+        0 0 1px 1px rgba(255, 255, 255, 0.05) inset;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.random-modal::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 24px;
+    background: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.1) 50%, transparent);
+    height: 1px;
+}
+
+/* Modal Close */
+.random-modal-close {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    z-index: 20;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.7);
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.random-modal-close:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.2);
+    color: #fff;
+    transform: scale(1.1);
+}
+
+/* Modal Content */
+.random-modal-content {
+    display: flex;
+    flex-direction: row;
+    height: 100%;
+}
+
+/* Modal Poster */
+.random-modal-poster {
+    position: relative;
+    flex-shrink: 0;
+    width: 320px;
+}
+
+.random-modal-poster img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.random-modal-poster-gradient {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to right, transparent 70%, rgba(10, 10, 15, 0.95) 100%);
+}
+
+/* Modal Details */
+.random-modal-details {
+    flex: 1;
+    padding: 40px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    overflow-y: auto;
+    max-height: 80vh;
+}
+
+.random-modal-error {
+    align-items: center;
+    justify-content: center;
+    color: var(--color-text-muted);
+}
+
+/* Type Badge */
+.random-modal-type {
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 14px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    border-radius: 50px;
+    background: rgba(229, 9, 20, 0.15);
+    color: #ff6b6b;
+    border: 1px solid rgba(229, 9, 20, 0.3);
+    width: fit-content;
+}
+
+/* Modal Title */
+.random-modal-title {
+    font-size: 2.5rem;
+    font-weight: 800;
+    color: #fff;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+}
+
+/* Meta Badges */
+.random-modal-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.random-meta-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    font-size: 0.85rem;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.random-meta-badge svg {
+    opacity: 0.7;
+}
+
+.random-meta-rating {
+    background: rgba(255, 193, 7, 0.15);
+    border-color: rgba(255, 193, 7, 0.3);
+    color: #ffc107;
+}
+
+.random-meta-rating svg {
+    fill: currentColor;
+    opacity: 1;
+}
+
+/* Genres */
+.random-modal-genres {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.random-genre-tag {
+    padding: 8px 16px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.8);
+}
+
+/* Overview */
+.random-modal-overview {
+    font-size: 0.95rem;
+    line-height: 1.7;
+    color: rgba(255, 255, 255, 0.6);
+    max-width: 500px;
+}
+
+/* Actions */
+.random-modal-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 12px;
+}
+
+/* Skeleton */
+.random-skeleton {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    animation: pulse 1.5s infinite;
+}
+
+.random-skeleton-badge {
+    width: 100px;
+    height: 28px;
+}
+
+.random-skeleton-title {
+    width: 80%;
+    height: 48px;
+}
+
+.random-skeleton-row {
+    display: flex;
+    gap: 10px;
+}
+
+.random-skeleton-meta {
+    width: 80px;
+    height: 36px;
+}
+
+.random-skeleton-text {
+    width: 100%;
+    height: 18px;
+}
+
+@keyframes pulse {
+
+    0%,
+    100% {
+        opacity: 0.4;
+    }
+
+    50% {
+        opacity: 0.8;
+    }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .random-modal-content {
+        flex-direction: column;
+    }
+
+    .random-modal-poster {
+        width: 100%;
+        height: 300px;
+    }
+
+    .random-modal-poster-gradient {
+        background: linear-gradient(to top, rgba(10, 10, 15, 1) 0%, transparent 100%);
+    }
+
+    .random-modal-title {
+        font-size: 1.75rem;
+    }
+
+    .random-modal-details {
+        padding: 24px;
+    }
+
+    .random-header {
+        padding: 16px;
+    }
+
+    .random-title {
+        font-size: 1.1rem;
+    }
+
+    .random-btn span {
+        display: none;
+    }
+}

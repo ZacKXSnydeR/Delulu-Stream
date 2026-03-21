@@ -1,0 +1,42 @@
+# Logs and caches
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Build artifacts
+node_modules
+dist
+dist-ssr
+dist-electron
+target
+*.pdb
+*.tmp
+*.cache
+
+# Local environment and secrets
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Local-only analysis/debug artifacts
+out.txt
+proxy_out.m3u8
+analization.md
+tryna_be_best_plan.md
+
+
+# Editor and OS files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

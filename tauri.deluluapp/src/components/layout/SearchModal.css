@@ -1,0 +1,601 @@
+/* =============================================
+   SEARCH MODAL - GOD LEVEL PREMIUM DESIGN
+   ============================================= */
+
+/* 1. MODAL OVERLAY - Smooth Dark Fade + Subtle Blur */
+.search-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+    z-index: 9999;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 100px;
+    animation: overlayFadeIn 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes overlayFadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/* 2. MODAL CONTAINER - Cinematic Focus */
+.search-modal {
+    width: 100%;
+    max-width: 580px;
+    background: rgba(18, 18, 20, 0.75);
+    border-radius: 22px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    overflow: hidden;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    animation: modalEnter 220ms cubic-bezier(0.22, 1, 0.36, 1);
+    display: flex;
+    flex-direction: column;
+}
+
+@keyframes modalEnter {
+    from {
+        opacity: 0;
+        transform: scale(0.98) translateY(-4px);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+/* =============================================
+   INNER SCROLL CONTAINER (LENIS CONTEXT)
+   ============================================= */
+.search-modal-scroll-container {
+    max-height: 520px;
+    overflow: hidden;
+    /* REQUIRED by Lenis — Lenis virtualizes scroll by translating content */
+    position: relative;
+}
+
+.search-modal-scroll-container::-webkit-scrollbar {
+    display: none;
+}
+
+.search-modal-scroll-content {
+    display: flex;
+    flex-direction: column;
+    padding-bottom: 16px;
+    /* Lenis will transform this element to simulate scroll */
+    will-change: transform;
+}
+
+/* 3. SEARCH INPUT - Premium Height & Subtle Highlight */
+.search-input-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 0 24px;
+    height: 52px;
+    background: transparent;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    position: relative;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.search-input-wrapper:focus-within {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.search-icon {
+    color: rgba(255, 255, 255, 0.5);
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    transition: color 200ms ease;
+}
+
+.search-input-wrapper:focus-within .search-icon {
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.search-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    font-size: 17px;
+    font-weight: 400;
+    color: rgba(255, 255, 255, 0.95);
+    font-family: inherit;
+    caret-color: rgba(255, 255, 255, 0.8);
+    height: 100%;
+}
+
+.search-input::placeholder {
+    color: rgba(255, 255, 255, 0.3);
+    font-weight: 400;
+    transition: opacity 200ms ease;
+}
+
+.search-input:focus::placeholder {
+    opacity: 0.5;
+}
+
+/* Close Button - Fades in when typing */
+.search-close-btn {
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.4);
+    cursor: pointer;
+    padding: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: all 200ms cubic-bezier(0.22, 1, 0.36, 1);
+    opacity: 0.7;
+}
+
+.search-close-btn:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.08);
+    transform: scale(1.05);
+    opacity: 1;
+}
+
+/* 4. LOADING SPINNER */
+.search-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 48px;
+}
+
+.search-spinner {
+    width: 28px;
+    height: 28px;
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    border-top-color: #e50914;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* 5. SEARCH RESULTS */
+.search-results {
+    display: flex;
+    flex-direction: column;
+}
+
+.search-results::-webkit-scrollbar {
+    width: 6px;
+}
+
+.search-results::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.search-results::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 3px;
+}
+
+.search-result-item {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 24px;
+    cursor: pointer;
+    background: transparent;
+    transition: background 200ms cubic-bezier(0.22, 1, 0.36, 1);
+    animation: resultAppear 200ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.search-result-item:nth-child(1) {
+    animation-delay: 10ms;
+}
+
+.search-result-item:nth-child(2) {
+    animation-delay: 30ms;
+}
+
+.search-result-item:nth-child(3) {
+    animation-delay: 50ms;
+}
+
+.search-result-item:nth-child(4) {
+    animation-delay: 70ms;
+}
+
+.search-result-item:nth-child(5) {
+    animation-delay: 90ms;
+}
+
+.search-result-item:nth-child(6) {
+    animation-delay: 110ms;
+}
+
+.search-result-item:nth-child(7) {
+    animation-delay: 130ms;
+}
+
+.search-result-item:nth-child(8) {
+    animation-delay: 150ms;
+}
+
+@keyframes resultAppear {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.search-result-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.search-result-item:hover .search-result-poster {
+    transform: scale(1.02);
+}
+
+.search-result-item:hover .search-result-title {
+    color: #ffffff;
+}
+
+.search-result-poster {
+    width: 48px;
+    height: 72px;
+    object-fit: cover;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.05);
+    transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.search-result-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.search-result-title {
+    font-weight: 500;
+    font-size: 15px;
+    margin-bottom: 4px;
+    color: rgba(255, 255, 255, 0.9);
+    transition: color 200ms ease;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.search-result-type {
+    display: inline-block;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.4);
+    background: rgba(255, 255, 255, 0.06);
+    padding: 3px 8px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.search-no-results {
+    padding: 48px 24px;
+    text-align: center;
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 14px;
+}
+
+/* =============================================
+   DEFAULT CONTENT - RECENT & TRENDING
+   ============================================= */
+
+.search-default-content {
+    padding: 8px 0 16px;
+}
+
+.search-default-content::-webkit-scrollbar {
+    width: 6px;
+}
+
+.search-default-content::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.search-default-content::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 3px;
+}
+
+/* Section Container */
+.search-section {
+    padding: 0 24px;
+    margin-bottom: 28px;
+}
+
+.search-section:last-child {
+    margin-bottom: 8px;
+}
+
+/* Section Header */
+.search-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+}
+
+/* Micro Labels */
+.search-section-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.45);
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+}
+
+.search-section-title svg {
+    color: #e50914;
+    opacity: 0.8;
+    width: 14px;
+    height: 14px;
+}
+
+.search-clear-btn {
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.35);
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    padding: 4px 10px;
+    border-radius: 4px;
+    transition: all 0.12s ease-out;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.search-clear-btn:hover {
+    color: #e50914;
+    background: rgba(229, 9, 20, 0.1);
+}
+
+/* =============================================
+   RECENT SEARCHES - Horizontal Cards
+   ============================================= */
+
+.search-recent-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.search-recent-item {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 10px 16px;
+    border-radius: 12px;
+    cursor: pointer;
+    background: transparent;
+    transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1), background-color 200ms ease;
+    will-change: transform;
+}
+
+.search-recent-item:hover {
+    background: rgba(255, 255, 255, 0.04);
+    transform: scale(1.01) translateZ(0);
+}
+
+.search-recent-item:hover .search-recent-poster {
+    filter: brightness(1.03);
+}
+
+.search-recent-item:hover .search-recent-title {
+    color: #ffffff;
+}
+
+.search-recent-poster {
+    width: 44px;
+    height: 66px;
+    object-fit: cover;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.05);
+    transition: filter 200ms ease;
+    flex-shrink: 0;
+}
+
+.search-recent-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.search-recent-title {
+    font-size: 14px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.85);
+    transition: color 200ms ease;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.search-recent-type {
+    display: inline-block;
+    font-size: 9px;
+    color: rgba(255, 255, 255, 0.4);
+    background: rgba(255, 255, 255, 0.08);
+    padding: 3px 8px;
+    border-radius: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    width: fit-content;
+}
+
+/* =============================================
+   TRENDING GRID - Visual Punch
+   ============================================= */
+
+.search-trending-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 14px;
+}
+
+.search-trending-item {
+    display: flex;
+    flex-direction: column;
+    cursor: pointer;
+    position: relative;
+}
+
+.search-trending-item:nth-child(3) {
+    transform: scale(1.01);
+    z-index: 1;
+}
+
+.search-trending-item:nth-child(1),
+.search-trending-item:nth-child(5) {
+    opacity: 0.85;
+}
+
+.search-trending-poster-wrapper {
+    position: relative;
+    overflow: hidden;
+    border-radius: 10px;
+    transition: all 0.15s ease-out;
+}
+
+.search-trending-item:hover .search-trending-poster-wrapper {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.search-trending-poster-wrapper::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 10px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, transparent 40%);
+    opacity: 0;
+    transition: opacity 220ms ease;
+    pointer-events: none;
+}
+
+.search-trending-item:hover .search-trending-poster-wrapper::after {
+    opacity: 1;
+}
+
+.search-trending-poster {
+    width: 100%;
+    aspect-ratio: 2/3;
+    object-fit: cover;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.05);
+    transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.search-trending-item:hover .search-trending-poster {
+    transform: scale(1.02);
+}
+
+.search-trending-title {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.5);
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 8px 4px 0;
+    opacity: 0;
+    transform: translateY(-4px);
+    transition: all 0.15s ease-out;
+}
+
+.search-trending-item:hover .search-trending-title {
+    opacity: 1;
+    transform: translateY(0);
+    color: rgba(255, 255, 255, 0.8);
+}
+
+/* =============================================
+   IDLE STATE - Editorial Suggestions
+   ============================================= */
+
+.search-idle-state {
+    padding: 40px 24px;
+    text-align: center;
+}
+
+.search-idle-text {
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.35);
+    margin-bottom: 16px;
+}
+
+.search-idle-suggestions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+}
+
+.search-idle-suggestion {
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.5);
+    background: rgba(255, 255, 255, 0.04);
+    padding: 8px 14px;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.12s ease-out;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.search-idle-suggestion:hover {
+    color: #ffffff;
+    background: rgba(229, 9, 20, 0.15);
+    border-color: rgba(229, 9, 20, 0.3);
+}
+
+/* Subtle shimmer animation */
+@keyframes shimmer {
+    0% {
+        background-position: -200% center;
+    }
+
+    100% {
+        background-position: 200% center;
+    }
+}
+
+.search-idle-shimmer {
+    background: linear-gradient(90deg,
+            transparent 0%,
+            rgba(255, 255, 255, 0.03) 50%,
+            transparent 100%);
+    background-size: 200% auto;
+    animation: shimmer 3s ease-in-out infinite;
+}

@@ -1,0 +1,145 @@
+/* =========================
+   FOOTER
+========================= */
+.footer {
+    width: 100%;
+    padding: 80px 24px 40px;
+    background: linear-gradient(to bottom, transparent, rgba(0, 0, 0, 0.8));
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    margin-top: 60px;
+}
+
+.footer-content {
+    max-width: 600px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    text-align: center;
+}
+
+/* Brand */
+.footer-brand {
+    font-size: 2rem;
+    font-weight: 800;
+    color: #e50914;
+    letter-spacing: 0.05em;
+    margin: 0;
+}
+
+.footer-tagline {
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.5);
+    margin: 0;
+}
+
+/* Action Buttons */
+.footer-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 16px;
+}
+
+.footer-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 0.85rem;
+    font-weight: 500;
+    text-decoration: none;
+    transition: all 0.2s ease;
+}
+
+.footer-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+    border-color: rgba(255, 255, 255, 0.25);
+    transform: translateY(-2px);
+}
+
+/* GitHub */
+.footer-github {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.05);
+    color: rgba(255, 255, 255, 0.6);
+    text-decoration: none;
+    transition: all 0.2s ease;
+    margin-top: 8px;
+}
+
+.footer-github:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+}
+
+/* Copyright */
+.footer-copyright {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 24px;
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.footer-copyright p {
+    margin: 0;
+}
+
+.footer-dot {
+    color: rgba(255, 255, 255, 0.2);
+}
+
+/* Credit */
+.footer-credit {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.4);
+    margin-top: 4px;
+}
+
+.footer-heart {
+    color: #e50914;
+    fill: #e50914;
+    animation: heartbeat 1.5s ease-in-out infinite;
+}
+
+@keyframes heartbeat {
+
+    0%,
+    100% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.15);
+    }
+}
+
+/* Responsive */
+@media (max-width: 500px) {
+    .footer-actions {
+        flex-direction: column;
+    }
+
+    .footer-copyright {
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .footer-dot {
+        display: none;
+    }
+}

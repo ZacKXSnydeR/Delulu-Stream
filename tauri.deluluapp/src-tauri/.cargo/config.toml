@@ -1,0 +1,6 @@
+# Static link the MSVC C runtime (VC++ redistributable) into the binary.
+# This eliminates the dependency on vcruntime140.dll / msvcp140.dll,
+# so the app runs on fresh Windows PCs without VC++ Redistributable installed.
+
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

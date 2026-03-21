@@ -1,0 +1,39 @@
+{
+  "name": "delulu",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Delulu - Movie & TV Streaming Desktop App",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "tauri": "node scripts/run-tauri-with-setup.cjs",
+    "sync:algolia": "node scripts/sync-algolia-index.mjs"
+  },
+  "dependencies": {
+    "@react-three/fiber": "^9.5.0",
+    "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-shell": "^2",
+    "@tauri-apps/plugin-sql": "^2.3.2",
+    "@use-gesture/react": "^10.3.1",
+    "framer-motion": "^12.27.1",
+    "hls.js": "^1.6.15",
+    "lenis": "^1.1.0",
+    "lucide-react": "^0.562.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-router-dom": "^7.12.0",
+    "three": "^0.182.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "@types/three": "^0.182.0",
+    "@vitejs/plugin-react": "^4.6.0",
+    "terser": "^5.46.0",
+    "typescript": "~5.8.3",
+    "vite": "^7.0.4"
+  }
+}

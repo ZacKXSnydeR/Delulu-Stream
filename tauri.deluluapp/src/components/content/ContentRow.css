@@ -1,0 +1,194 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
+
+/* ============================================
+   CONTENT ROW - Netflix Premium Style
+   ============================================ */
+
+.content-row {
+    margin-bottom: var(--spacing-2xl);
+    position: relative;
+}
+
+/* ============================================
+   HEADER - Title + Nav Buttons
+   ============================================ */
+
+.content-row-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 var(--spacing-xl);
+    margin-bottom: var(--spacing-md);
+}
+
+.content-row-title {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    font-family: 'Outfit', 'Inter', sans-serif;
+    font-size: 1.35rem;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    color: rgba(255, 255, 255, 0.92);
+    margin: 0;
+    transition: color 0.3s ease;
+}
+
+/* ============================================
+   NAV BUTTONS - Smooth Premium Animations
+   ============================================ */
+
+.content-row-nav {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.content-row-nav-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.04));
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: rgba(255, 255, 255, 0.9);
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+    transition: all 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+.content-row-nav-btn:hover:not(.disabled) {
+    border-color: rgba(255, 60, 60, 0.8);
+}
+
+.content-row-nav-btn:active:not(.disabled) {
+    border-color: rgba(255, 40, 40, 1);
+}
+
+.content-row-nav-btn.disabled {
+    opacity: 0.2;
+    cursor: not-allowed;
+    transform: scale(0.9);
+}
+
+/* ============================================
+   CONTENT ITEMS - Smooth Scroll with Animation
+   ============================================ */
+
+.content-row-items {
+    display: flex;
+    gap: var(--spacing-md);
+    padding: var(--spacing-sm) var(--spacing-xl);
+    overflow-x: auto;
+    scroll-behavior: smooth;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    position: relative;
+}
+
+.content-row-items::-webkit-scrollbar {
+    display: none;
+}
+
+
+/* Card animation on scroll */
+.content-row-items>* {
+    animation: fadeSlideIn 0.6s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+@keyframes fadeSlideIn {
+    from {
+        opacity: 0;
+        transform: translateX(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+/* Stagger animation for cards */
+.content-row-items>*:nth-child(1) {
+    animation-delay: 0.05s;
+}
+
+.content-row-items>*:nth-child(2) {
+    animation-delay: 0.1s;
+}
+
+.content-row-items>*:nth-child(3) {
+    animation-delay: 0.15s;
+}
+
+.content-row-items>*:nth-child(4) {
+    animation-delay: 0.2s;
+}
+
+.content-row-items>*:nth-child(5) {
+    animation-delay: 0.25s;
+}
+
+.content-row-items>*:nth-child(6) {
+    animation-delay: 0.3s;
+}
+
+.content-row-items>*:nth-child(7) {
+    animation-delay: 0.35s;
+}
+
+.content-row-items>*:nth-child(8) {
+    animation-delay: 0.4s;
+}
+
+/* Skeleton loading with pulse */
+.content-row-items .skeleton-card {
+    aspect-ratio: 2/3;
+    width: clamp(140px, 13.5vw, 220px);
+    flex-shrink: 0;
+    background: linear-gradient(135deg,
+            rgba(255, 255, 255, 0.03) 0%,
+            rgba(255, 255, 255, 0.01) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    animation: skeletonPulse 2s ease-in-out infinite;
+}
+
+@keyframes skeletonPulse {
+
+    0%,
+    100% {
+        opacity: 0.4;
+    }
+
+    50% {
+        opacity: 0.6;
+    }
+}
+
+/* ============================================
+   RESPONSIVE - Mobile Optimized
+   ============================================ */
+
+@media (max-width: 768px) {
+    .content-row-header {
+        padding: 0 var(--spacing-md);
+    }
+
+    .content-row-items {
+        padding: var(--spacing-sm) var(--spacing-md);
+        gap: var(--spacing-sm);
+    }
+
+    .content-row-title {
+        font-size: var(--font-size-lg);
+    }
+
+    .content-row-nav-btn {
+        width: 36px;
+        height: 36px;
+    }
+
+}

@@ -1,0 +1,66 @@
+.player-chrome-bar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    z-index: 500;
+    padding-left: 20px;
+    background: transparent;
+    -webkit-app-region: drag;
+    pointer-events: auto;
+}
+
+.player-chrome-brand-wrap {
+    display: flex;
+    align-items: center;
+    -webkit-app-region: no-drag;
+}
+
+.player-chrome-brand {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #e53935;
+    letter-spacing: 0.05em;
+}
+
+.player-chrome-drag {
+    flex: 1;
+    height: 100%;
+    -webkit-app-region: drag;
+}
+
+.player-chrome-controls {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    height: 100%;
+    padding-right: 6px;
+    -webkit-app-region: no-drag;
+}
+
+.player-chrome-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: #fff;
+    cursor: pointer;
+    transition: background 0.15s ease, border-radius 0.15s ease;
+}
+
+.player-chrome-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 50%;
+}
+
+.player-chrome-btn-close:hover {
+    background: #e53935;
+    border-radius: 50%;
+}

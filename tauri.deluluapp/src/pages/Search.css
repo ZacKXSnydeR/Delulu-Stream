@@ -1,0 +1,210 @@
+.search-page {
+    background-color: #000;
+    min-height: 100vh;
+    padding-top: 100px;
+    padding-bottom: 60px;
+    color: #fff;
+}
+
+.search-container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 0 40px;
+}
+
+.search-header {
+    margin-bottom: 40px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding-bottom: 20px;
+}
+
+.search-title {
+    font-size: 2.5rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    margin: 0 0 10px 0;
+    background: linear-gradient(to right, #fff, #999);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.search-count {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 1.1rem;
+    font-weight: 500;
+}
+
+/* Grid Layout */
+.search-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 30px;
+    row-gap: 40px;
+}
+
+/* Card Styling */
+.search-card {
+    cursor: pointer;
+    transition: transform 0.4s cubic-bezier(0.2, 1, 0.3, 1);
+    position: relative;
+}
+
+.search-card:hover {
+    transform: translateY(-8px);
+}
+
+.search-card-poster-wrapper {
+    position: relative;
+    aspect-ratio: 2/3;
+    border-radius: 12px;
+    overflow: hidden;
+    background-color: #1a1a1a;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+.search-card-poster {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.6s cubic-bezier(0.2, 1, 0.3, 1), filter 0.3s ease;
+}
+
+.search-card:hover .search-card-poster {
+    transform: scale(1.1);
+    filter: brightness(0.6);
+}
+
+.search-card-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    background: radial-gradient(circle, rgba(0,0,0,0.4) 0%, transparent 70%);
+}
+
+.search-card:hover .search-card-overlay {
+    opacity: 1;
+}
+
+.search-card-play-btn {
+    width: 54px;
+    height: 54px;
+    background-color: #fff;
+    color: #000;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transform: scale(0.8);
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+}
+
+.search-card:hover .search-card-play-btn {
+    transform: scale(1);
+}
+
+.search-card-info {
+    margin-top: 16px;
+}
+
+.search-card-title {
+    font-size: 1.05rem;
+    font-weight: 600;
+    margin: 0 0 6px 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: #fff;
+    transition: color 0.2s ease;
+}
+
+.search-card:hover .search-card-title {
+    color: #fff; /* or a highlight color */
+}
+
+.search-card-meta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.85rem;
+    color: rgba(255, 255, 255, 0.5);
+    font-weight: 500;
+}
+
+.search-card-type {
+    padding: 2px 8px;
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-size: 0.75rem;
+}
+
+/* States */
+.search-page-loading, .search-empty, .search-error {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 100px 0;
+    text-align: center;
+}
+
+.search-spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid rgba(255, 255, 255, 0.1);
+    border-top: 3px solid #fff;
+    border-radius: 50%;
+    animation: search-spin 1s linear infinite;
+}
+
+@keyframes search-spin {
+    to { transform: rotate(360deg); }
+}
+
+.search-empty svg {
+    margin-bottom: 24px;
+    color: rgba(255, 255, 255, 0.2);
+}
+
+.search-empty h2 {
+    font-size: 2rem;
+    margin-bottom: 12px;
+}
+
+.search-empty p {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 1.1rem;
+}
+
+.search-scroll-trigger {
+    height: 100px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 40px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .search-container {
+        padding: 0 20px;
+    }
+    
+    .search-grid {
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        gap: 20px;
+    }
+    
+    .search-title {
+        font-size: 1.8rem;
+    }
+}
