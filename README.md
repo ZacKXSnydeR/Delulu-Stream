@@ -70,6 +70,9 @@ npm run tauri build -- --target x86_64-pc-windows-msvc --bundles msi
 - If a title does not play or content is unavailable, that is usually a provider-side issue.
 - If you can add and maintain a new provider, contributions are very welcome.
 
+## Upcoming
+- Torrent streaming integration is currently in active development.
+
 ## License
 This project is licensed under the MIT License. See [LICENSE](./LICENSE).
 
