@@ -9,6 +9,14 @@ Delulu Stream is a desktop-first streaming experience built with **Tauri + React
 - Algolia-ready search pipeline and indexing script support
 - Watch history, list management, and local persistence
 
+## Screenshots
+![Home](./Screenshots/Screenshot%202026-03-21%20152718.png)
+![Details](./Screenshots/Screenshot%202026-03-21%20152725.png)
+![Player](./Screenshots/Screenshot%202026-03-21%20152737.png)
+![Search](./Screenshots/Screenshot%202026-03-21%20152802.png)
+![Mini Player](./Screenshots/Screenshot%202026-03-21%20152920.png)
+![Settings](./Screenshots/Screenshot%202026-03-21%20153154.png)
+
 ## Repository Layout
 - `tauri.deluluapp/`: main desktop application (frontend + Tauri backend)
 - `gods_EYE/`: extractor sidecar project used by the desktop app
@@ -64,5 +72,11 @@ npm run tauri build -- --target x86_64-pc-windows-msvc --bundles msi
 - Do not commit build caches (`target/`, `dist/`) or installer artifacts
 - Verify sidecar binaries match your build target architecture before release
 
+## Important Disclaimer
+- This is a partially vibe-coded project. Bugs, rough edges, and mistakes can happen.
+- Delulu Stream does **not** host or own any video content.
+- If a title does not play or content is unavailable, that is usually a provider-side issue.
+- If you can add and maintain a new provider, contributions are very welcome.
+
 ## License
-Set your preferred license before public distribution.
+This project is licensed under the MIT License. See [LICENSE](./LICENSE).
