@@ -2,7 +2,7 @@
   "name": "delulu",
   "private": true,
   "version": "1.0.0",
-  "description": "Delulu - Movie & TV Streaming Desktop App",
+  "description": "Delulu Stream desktop client built with Tauri and React for resilient HLS playback and premium media browsing.",
   "type": "module",
   "scripts": {
     "dev": "vite",

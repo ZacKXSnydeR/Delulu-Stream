@@ -1,73 +1,68 @@
-# React + TypeScript + Vite
+# Delulu Stream
+Delulu Stream is a desktop-first streaming experience built with **Tauri + React + TypeScript**, focused on smooth playback, resilient HLS handling, and a polished media UX.
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+## Highlights
+- Tauri desktop app with custom player chrome and mini-player support
+- HLS proxy pipeline with manifest probing and retry logic
+- Sidecar extractor integration via `gods_EYE`
+- TMDB-backed catalog, details pages, and trailer launch flow
+- Algolia-ready search pipeline and indexing script support
+- Watch history, list management, and local persistence
 
-Currently, two official plugins are available:
+## Repository Layout
+- `tauri.deluluapp/`: main desktop application (frontend + Tauri backend)
+- `gods_EYE/`: extractor sidecar project used by the desktop app
+- `sounds/`: shared audio assets
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Tech Stack
+- Frontend: React 19, TypeScript, Vite, Framer Motion, hls.js
+- Desktop: Tauri v2 (Rust backend)
+- Data: TMDB proxying via backend, optional Algolia search index
+- Local storage: SQLite (Tauri plugin) + local cache layers
 
-## React Compiler
+## Prerequisites
+- Node.js 20+
+- Rust toolchain (`stable`) with Cargo
+- Microsoft C++ Build Tools (for Windows builds)
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Environment Setup
+Use local-only env files and never commit secrets.
 
-## Expanding the ESLint configuration
+1. In `tauri.deluluapp/`, copy `.env.example` to `.env.local`
+2. Fill required keys:
+- `TMDB_READ_TOKEN`
+- `ALGOLIA_APP_ID`
+- `ALGOLIA_SEARCH_KEY`
+- `ALGOLIA_INDEX_NAME` (optional default: `delulu_content`)
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+Note: `.env.local` is git-ignored by design.
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Development
+```bash
+cd tauri.deluluapp
+npm ci
+npm run tauri dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Production Build
+### Windows x64 (NSIS)
+```bash
+cd tauri.deluluapp
+npm ci
+npm run tauri build -- --target x86_64-pc-windows-msvc --bundles nsis
 ```
+
+### Windows x64 (MSI)
+```bash
+cd tauri.deluluapp
+npm ci
+npm run tauri build -- --target x86_64-pc-windows-msvc --bundles msi
+```
+
+## Security and Release Notes
+- Keep all runtime secrets in `.env.local` (never in tracked files)
+- Do not commit build caches (`target/`, `dist/`) or installer artifacts
+- Verify sidecar binaries match your build target architecture before release
+
+## License
+Set your preferred license before public distribution.

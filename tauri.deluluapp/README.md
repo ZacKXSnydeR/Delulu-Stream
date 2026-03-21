@@ -1,7 +1,29 @@
-# Tauri + React + Typescript
+# Delulu Desktop App
+Main Tauri application for Delulu Stream.
 
-This template should help get you started developing with Tauri, React and Typescript in Vite.
+## Quick Start
+```bash
+npm ci
+npm run tauri dev
+```
 
-## Recommended IDE Setup
+## Build
+```bash
+# x64 NSIS
+npm run tauri build -- --target x86_64-pc-windows-msvc --bundles nsis
 
-- [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+# x64 MSI
+npm run tauri build -- --target x86_64-pc-windows-msvc --bundles msi
+```
+
+## Required Environment
+Create `.env.local` from `.env.example` and provide:
+- `TMDB_READ_TOKEN`
+- `ALGOLIA_APP_ID`
+- `ALGOLIA_SEARCH_KEY`
+- `ALGOLIA_INDEX_NAME` (optional)
+
+## Notes
+- Secrets must stay in `.env.local` only.
+- Build outputs under `src-tauri/target` are not source artifacts.
+- Sidecar binaries must match target architecture (x64/x86).
