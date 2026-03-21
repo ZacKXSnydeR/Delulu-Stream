@@ -9,14 +9,6 @@ Delulu Stream is a desktop-first streaming experience built with **Tauri + React
 - Algolia-ready search pipeline and indexing script support
 - Watch history, list management, and local persistence
 
-## Screenshots
-![Home](./Screenshots/Screenshot%202026-03-21%20152718.png)
-![Details](./Screenshots/Screenshot%202026-03-21%20152725.png)
-![Player](./Screenshots/Screenshot%202026-03-21%20152737.png)
-![Search](./Screenshots/Screenshot%202026-03-21%20152802.png)
-![Mini Player](./Screenshots/Screenshot%202026-03-21%20152920.png)
-![Settings](./Screenshots/Screenshot%202026-03-21%20153154.png)
-
 ## Repository Layout
 - `tauri.deluluapp/`: main desktop application (frontend + Tauri backend)
 - `gods_EYE/`: extractor sidecar project used by the desktop app
@@ -80,3 +72,11 @@ npm run tauri build -- --target x86_64-pc-windows-msvc --bundles msi
 
 ## License
 This project is licensed under the MIT License. See [LICENSE](./LICENSE).
+
+## Screenshots
+![Home](./Screenshots/Screenshot%202026-03-21%20152718.png)
+![Details](./Screenshots/Screenshot%202026-03-21%20152725.png)
+![Player](./Screenshots/Screenshot%202026-03-21%20152737.png)
+![Search](./Screenshots/Screenshot%202026-03-21%20152802.png)
+![Mini Player](./Screenshots/Screenshot%202026-03-21%20152920.png)
+![Settings](./Screenshots/Screenshot%202026-03-21%20153154.png)
