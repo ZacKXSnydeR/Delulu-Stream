@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { type TMDBContent } from '../../services/tmdb';
+import { type TMDBContent, getMediaType } from '../../services/tmdb';
 import { ContentCard } from './ContentCard';
 import './ContentRow.css';
 
@@ -108,7 +108,7 @@ export function ContentRow({ title, items, icon, isLoading = false }: ContentRow
                 onScroll={handleScroll}
             >
                 {items.map((item) => (
-                    <ContentCard key={item.id} content={item} />
+                    <ContentCard key={`${getMediaType(item)}-${item.id}`} content={item} />
                 ))}
             </div>
         </div>

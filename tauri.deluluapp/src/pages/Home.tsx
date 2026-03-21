@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { usePlayer } from '../context/PlayerContext';
@@ -29,12 +29,47 @@ import './Home.css';
 interface ContinueWatchingEntry {
     history: WatchHistoryItem;
     content: TMDBContent;
-    /** If the last episode was completed, this points to the next episode to watch */
     nextEpisode?: {
         seasonNumber: number;
         episodeNumber: number;
         name: string;
     };
+}
+
+const HOME_CACHE_KEY = 'delulu_home_cache_v1';
+
+interface PersistedHomeCache {
+    hero: TMDBContent[];
+    trending: TMDBContent[];
+    popularMovies: TMDBMovie[];
+    popularTVShows: TMDBTVShow[];
+    topRated: TMDBMovie[];
+}
+
+function readPersistedHomeCache(): PersistedHomeCache | null {
+    try {
+        const raw = sessionStorage.getItem(HOME_CACHE_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw) as Partial<PersistedHomeCache>;
+        if (!Array.isArray(parsed.trending) || parsed.trending.length === 0) return null;
+        return {
+            hero: Array.isArray(parsed.hero) ? parsed.hero : [],
+            trending: parsed.trending as TMDBContent[],
+            popularMovies: Array.isArray(parsed.popularMovies) ? (parsed.popularMovies as TMDBMovie[]) : [],
+            popularTVShows: Array.isArray(parsed.popularTVShows) ? (parsed.popularTVShows as TMDBTVShow[]) : [],
+            topRated: Array.isArray(parsed.topRated) ? (parsed.topRated as TMDBMovie[]) : [],
+        };
+    } catch {
+        return null;
+    }
+}
+
+function persistHomeCache(cache: PersistedHomeCache) {
+    try {
+        sessionStorage.setItem(HOME_CACHE_KEY, JSON.stringify(cache));
+    } catch {
+        // ignore storage errors
+    }
 }
 
 function toMovieContent(details: Awaited<ReturnType<typeof getMovieDetails>>): TMDBMovie {
@@ -78,7 +113,17 @@ let cachedTrending: TMDBContent[] = [];
 let cachedPopularMovies: TMDBMovie[] = [];
 let cachedPopularTVShows: TMDBTVShow[] = [];
 let cachedTopRated: TMDBMovie[] = [];
+let cachedContinueWatching: ContinueWatchingEntry[] = [];
 let cachedScrollY = 0;
+
+const persistedCache = readPersistedHomeCache();
+if (persistedCache) {
+    if (cachedHero.length === 0) cachedHero = persistedCache.hero;
+    if (cachedTrending.length === 0) cachedTrending = persistedCache.trending;
+    if (cachedPopularMovies.length === 0) cachedPopularMovies = persistedCache.popularMovies;
+    if (cachedPopularTVShows.length === 0) cachedPopularTVShows = persistedCache.popularTVShows;
+    if (cachedTopRated.length === 0) cachedTopRated = persistedCache.topRated;
+}
 
 export function Home() {
     const navigate = useNavigate();
@@ -88,13 +133,50 @@ export function Home() {
     const [popularMovies, setPopularMovies] = useState<TMDBMovie[]>(cachedPopularMovies);
     const [popularTVShows, setPopularTVShows] = useState<TMDBTVShow[]>(cachedPopularTVShows);
     const [topRatedMovies, setTopRatedMovies] = useState<TMDBMovie[]>(cachedTopRated);
-    const [continueWatching, setContinueWatching] = useState<ContinueWatchingEntry[]>([]);
+    const [continueWatching, setContinueWatching] = useState<ContinueWatchingEntry[]>(cachedContinueWatching);
     const [isLoading, setIsLoading] = useState(cachedTrending.length === 0);
 
     const scrollRef = useRef<HTMLDivElement>(null);
     const [showLeftArrow, setShowLeftArrow] = useState(false);
     const [showRightArrow, setShowRightArrow] = useState(true);
     const topThreeTrending = trending.slice(0, 3);
+    const moodChips = ['Midnight Tension', 'Slow Burn', 'Cerebral', 'Pulse-Heavy', 'Lonely Nights', 'Cathartic'];
+    const [selectedMood, setSelectedMood] = useState(moodChips[0]);
+    const moodGrid = useMemo(() => {
+        const merged: TMDBContent[] = [...trending, ...popularMovies, ...popularTVShows, ...topRatedMovies];
+        const unique = new Map<string, TMDBContent>();
+        for (const item of merged) {
+            const key = `${getMediaType(item)}-${item.id}`;
+            if (!unique.has(key)) unique.set(key, item);
+        }
+
+        const moodProfiles: Record<string, { genres: number[]; words: string[] }> = {
+            'Midnight Tension': { genres: [53, 9648, 27, 80], words: ['night', 'dark', 'danger', 'chase', 'crime', 'killer'] },
+            'Slow Burn': { genres: [18, 10749, 36], words: ['journey', 'quiet', 'family', 'memory', 'drama', 'life'] },
+            'Cerebral': { genres: [878, 9648, 99], words: ['mind', 'future', 'space', 'science', 'mystery', 'theory'] },
+            'Pulse-Heavy': { genres: [28, 12, 10759], words: ['battle', 'war', 'survival', 'mission', 'fight', 'revenge'] },
+            'Lonely Nights': { genres: [18, 10751, 35], words: ['lonely', 'lost', 'alone', 'heart', 'friendship', 'city'] },
+            'Cathartic': { genres: [18, 14, 10770], words: ['healing', 'hope', 'redemption', 'dream', 'spirit', 'home'] },
+        };
+
+        const profile = moodProfiles[selectedMood] ?? moodProfiles['Midnight Tension'];
+        const scored = Array.from(unique.values())
+            .map((item) => {
+                const title = getTitle(item).toLowerCase();
+                const overview = (item.overview || '').toLowerCase();
+                const text = `${title} ${overview}`;
+                const genreScore = (item.genre_ids || []).reduce((sum, g) => sum + (profile.genres.includes(g) ? 2 : 0), 0);
+                const wordScore = profile.words.reduce((sum, word) => sum + (text.includes(word) ? 1 : 0), 0);
+                const popularityBoost = Math.min(2, Math.max(0, (item.vote_average || 0) / 5));
+                return { item, score: genreScore + wordScore + popularityBoost };
+            })
+            .sort((a, b) => b.score - a.score)
+            .map((entry) => entry.item);
+
+        const withPoster = scored.filter((item) => !!item.poster_path);
+        const pool = withPoster.length >= 4 ? withPoster : scored;
+        return pool.slice(0, 4);
+    }, [trending, popularMovies, popularTVShows, topRatedMovies, selectedMood]);
 
     const handleScroll = () => {
         if (!scrollRef.current) return;
@@ -107,17 +189,17 @@ export function Home() {
         if (!scrollRef.current) return;
         const container = scrollRef.current;
         const scrollAmount = container.clientWidth * 0.8;
-        const target = direction === 'left'
-            ? container.scrollLeft - scrollAmount
-            : container.scrollLeft + scrollAmount;
+        const target =
+            direction === 'left'
+                ? container.scrollLeft - scrollAmount
+                : container.scrollLeft + scrollAmount;
         const start = container.scrollLeft;
         const distance = target - start;
         const duration = 500;
         let startTime: number | null = null;
 
-        const ease = (t: number) => t < 0.5
-            ? 4 * t * t * t
-            : 1 - Math.pow(-2 * t + 2, 3) / 2;
+        const ease = (t: number) =>
+            t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 
         const step = (timestamp: number) => {
             if (!startTime) startTime = timestamp;
@@ -136,6 +218,17 @@ export function Home() {
     useEffect(() => { cachedPopularMovies = popularMovies; }, [popularMovies]);
     useEffect(() => { cachedPopularTVShows = popularTVShows; }, [popularTVShows]);
     useEffect(() => { cachedTopRated = topRatedMovies; }, [topRatedMovies]);
+    useEffect(() => { cachedContinueWatching = continueWatching; }, [continueWatching]);
+    useEffect(() => {
+        if (trending.length === 0) return;
+        persistHomeCache({
+            hero: heroItems,
+            trending,
+            popularMovies,
+            popularTVShows,
+            topRated: topRatedMovies,
+        });
+    }, [heroItems, trending, popularMovies, popularTVShows, topRatedMovies]);
 
     // Restore scroll position on mount, save on unmount
     useEffect(() => {
@@ -146,16 +239,9 @@ export function Home() {
     }, []);
 
     const fetchContinueWatching = useCallback(async () => {
-        console.log('[Home] Fetching continue watching...');
         try {
             const historyItems = await watchService.getContinueWatching(12);
-            console.log('[Home] Raw history items:', historyItems);
-
-            if (!historyItems.length) {
-                console.log('[Home] No history items found');
-                setContinueWatching([]);
-                return;
-            }
+            if (!historyItems.length) { setContinueWatching([]); return; }
 
             const resolved = await Promise.allSettled(
                 historyItems.map(async (history): Promise<ContinueWatchingEntry | null> => {
@@ -167,13 +253,11 @@ export function Home() {
                     const details = await getTVShowDetails(history.tmdb_id);
                     const entry: ContinueWatchingEntry = { history, content: toTVContent(details) };
 
-                    // If this TV episode was completed, resolve the NEXT episode
                     if (history.is_completed && history.media_type === 'tv') {
                         const curSeason = history.season_number ?? 1;
                         const curEpisode = history.episode_number ?? 1;
 
                         try {
-                            // Try next episode in same season
                             const seasonData = await getSeasonDetails(history.tmdb_id, curSeason);
                             const nextEpInSeason = seasonData.episodes.find(
                                 (ep) => ep.episode_number === curEpisode + 1
@@ -186,17 +270,12 @@ export function Home() {
                                     name: nextEpInSeason.name,
                                 };
                             } else {
-                                // Try first episode of next season
                                 const seasons = details.seasons
-                                    ?.filter((s) => s.season_number > 0) // skip specials
+                                    ?.filter((s) => s.season_number > 0)
                                     .sort((a, b) => a.season_number - b.season_number);
-
                                 const nextSeason = seasons?.find((s) => s.season_number > curSeason);
                                 if (nextSeason) {
-                                    const nextSeasonData = await getSeasonDetails(
-                                        history.tmdb_id,
-                                        nextSeason.season_number
-                                    );
+                                    const nextSeasonData = await getSeasonDetails(history.tmdb_id, nextSeason.season_number);
                                     const firstEp = nextSeasonData.episodes[0];
                                     if (firstEp) {
                                         entry.nextEpisode = {
@@ -206,11 +285,9 @@ export function Home() {
                                         };
                                     }
                                 }
-                                // No next season means show is fully watched — skip this entry
                                 if (!entry.nextEpisode) return null;
                             }
                         } catch {
-                            // TMDB lookup failed — still show as continue watching without next-ep info
                             console.error('[Home] Failed to resolve next episode for', history.tmdb_id);
                         }
                     }
@@ -224,7 +301,6 @@ export function Home() {
                 .map((r) => r.value)
                 .filter((entry): entry is ContinueWatchingEntry => entry !== null);
 
-            console.log('[Home] Resolved continue watching entries:', entries);
             setContinueWatching(entries);
         } catch (error) {
             console.error('[Home] Error fetching continue watching:', error);
@@ -233,43 +309,32 @@ export function Home() {
     }, []);
 
     useEffect(() => {
-        // If we have cached data, skip network calls for main content
         if (cachedTrending.length > 0) {
             setIsLoading(false);
             fetchContinueWatching().catch(console.error);
             return;
         }
 
-        // Fire all fetches independently — each section appears as soon as its data lands
-        getTrending('all', 'week').then(data => {
+        getTrending('all', 'week').then((data) => {
             setHeroItems(data.slice(0, 5));
             setTrending(data);
-            setIsLoading(false); // Unblock as soon as hero/trending is ready
+            setIsLoading(false);
         }).catch((err) => {
             console.error('[Home] Failed to load trending:', err);
             setIsLoading(false);
         });
 
-        getPopularMovies().then(data => {
-            setPopularMovies(data.results);
-        }).catch(console.error);
-
-        getPopularTVShows().then(data => {
-            setPopularTVShows(data.results);
-        }).catch(console.error);
-
-        getTopRatedMovies().then(data => {
-            setTopRatedMovies(data.results);
-        }).catch(console.error);
-
+        getPopularMovies().then((data) => setPopularMovies(data.results)).catch(console.error);
+        getPopularTVShows().then((data) => setPopularTVShows(data.results)).catch(console.error);
+        getTopRatedMovies().then((data) => setTopRatedMovies(data.results)).catch(console.error);
         fetchContinueWatching().catch(console.error);
     }, [fetchContinueWatching]);
 
     useEffect(() => {
         const onFocus = () => {
+            if (document.visibilityState !== 'visible') return;
             fetchContinueWatching().catch(console.error);
         };
-
         window.addEventListener('focus', onFocus);
         document.addEventListener('visibilitychange', onFocus);
         return () => {
@@ -285,56 +350,29 @@ export function Home() {
 
         if (history.media_type === 'movie') {
             const movieTitle = 'title' in content ? content.title : 'Movie';
-            playMedia({
-                mediaType: 'movie',
-                tmdbId: history.tmdb_id,
-                title: movieTitle,
-                posterPath: poster,
-                initialTime: history.current_time,
-            });
+            playMedia({ mediaType: 'movie', tmdbId: history.tmdb_id, title: movieTitle, posterPath: poster, initialTime: history.current_time });
             return;
         }
 
-        // If this entry has a resolved next episode (completed last ep), play that
         if (nextEpisode) {
             const nextTitle = `${showName} - S${nextEpisode.seasonNumber}E${nextEpisode.episodeNumber}: ${nextEpisode.name}`;
-            playMedia({
-                mediaType: 'tv',
-                tmdbId: history.tmdb_id,
-                season: nextEpisode.seasonNumber,
-                episode: nextEpisode.episodeNumber,
-                title: nextTitle,
-                posterPath: poster,
-                initialTime: 0,
-            });
+            playMedia({ mediaType: 'tv', tmdbId: history.tmdb_id, season: nextEpisode.seasonNumber, episode: nextEpisode.episodeNumber, title: nextTitle, posterPath: poster, initialTime: 0 });
             return;
         }
 
-        // Otherwise resume where the user left off
         const tvTitle = `${showName} - S${history.season_number || 1}E${history.episode_number || 1}`;
-        playMedia({
-            mediaType: 'tv',
-            tmdbId: history.tmdb_id,
-            season: history.season_number || 1,
-            episode: history.episode_number || 1,
-            title: tvTitle,
-            posterPath: poster,
-            initialTime: history.current_time,
-        });
+        playMedia({ mediaType: 'tv', tmdbId: history.tmdb_id, season: history.season_number || 1, episode: history.episode_number || 1, title: tvTitle, posterPath: poster, initialTime: history.current_time });
     };
 
     const handleDelete = async (e: React.MouseEvent, entry: ContinueWatchingEntry) => {
         e.preventDefault();
         e.stopPropagation();
-
         await watchService.removeRecord({
             tmdbId: entry.history.tmdb_id,
             mediaType: entry.history.media_type,
             seasonNumber: entry.history.season_number || undefined,
-            episodeNumber: entry.history.episode_number || undefined
+            episodeNumber: entry.history.episode_number || undefined,
         });
-
-        // Trigger a fresh fetch so the UI updates
         fetchContinueWatching();
     };
 
@@ -365,74 +403,42 @@ export function Home() {
     return (
         <div className="home-page">
             <HeroCarousel items={heroItems} />
+
             <div className="home-content">
-                {topThreeTrending.length > 0 && (
-                    <section className="content-row top3-row">
-                        <div className="content-row-header">
-                            <h2 className="content-row-title">Today's Top 3</h2>
-                        </div>
-                        <div className="top3-grid">
-                            {topThreeTrending.map((item, index) => {
-                                const mediaType = getMediaType(item);
-                                const title = getTitle(item);
-                                const backdrop = getBackdropUrl(item.backdrop_path || item.poster_path, 'large');
-                                return (
-                                    <button
-                                        key={`${mediaType}-${item.id}`}
-                                        className="top3-card"
-                                        onClick={() => navigate(`/details/${mediaType}/${item.id}`)}
-                                        aria-label={`Open ${title}`}
-                                    >
-                                        <span className="top3-rank-bg" aria-hidden="true">{index + 1}</span>
 
-                                        <div className="top3-media">
-                                            <img className="top3-poster" src={backdrop} alt={title} loading="lazy" />
-                                            <div className="top3-overlay" />
-                                            <div className="top3-meta">
-                                                <h3 className="top3-title">{title}</h3>
-                                                <span className="top3-subtitle">{mediaType.toUpperCase()} • {getReleaseYear(item)}</span>
-                                            </div>
-                                            <span className="top3-chip">Top Pick</span>
-                                        </div>
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    </section>
-                )}
-
+                {/* ── Continue Watching ── */}
                 {continueWatching.length > 0 && (
-                    <section className="content-row continue-watching-row">
-                        <div className="content-row-header">
-                            <h2 className="content-row-title">
-                                Continue Watching
-                            </h2>
-                            <div className="content-row-nav">
-                                <button
-                                    className={`content-row-nav-btn ${!showLeftArrow ? 'disabled' : ''}`}
-                                    onClick={() => scroll('left')}
-                                    disabled={!showLeftArrow}
-                                    aria-label="Scroll left"
-                                >
-                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                        <path d="M15 18l-6-6 6-6" />
-                                    </svg>
-                                </button>
-                                <button
-                                    className={`content-row-nav-btn ${!showRightArrow ? 'disabled' : ''}`}
-                                    onClick={() => scroll('right')}
-                                    disabled={!showRightArrow}
-                                    aria-label="Scroll right"
-                                >
-                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                        <path d="M9 18l6-6-6-6" />
-                                    </svg>
-                                </button>
-                            </div>
+                    <section className="home-section continue-watching-section">
+                        <div className="home-section-header">
+                            <div className="home-section-label">Resume</div>
+                            <h2 className="home-section-title">Continue Watching</h2>
+                            <div className="home-section-rule" />
+                        </div>
+                        <div className="content-row-header-nav">
+                            <button
+                                className={`content-row-nav-btn ${!showLeftArrow ? 'disabled' : ''}`}
+                                onClick={() => scroll('left')}
+                                disabled={!showLeftArrow}
+                                aria-label="Scroll left"
+                            >
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M15 18l-6-6 6-6" />
+                                </svg>
+                            </button>
+                            <button
+                                className={`content-row-nav-btn ${!showRightArrow ? 'disabled' : ''}`}
+                                onClick={() => scroll('right')}
+                                disabled={!showRightArrow}
+                                aria-label="Scroll right"
+                            >
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M9 18l6-6-6-6" />
+                                </svg>
+                            </button>
                         </div>
                         <div
                             ref={scrollRef}
-                            className="content-row-items"
+                            className="content-row-items continue-watching-row"
                             onScroll={handleScroll}
                         >
                             {continueWatching.map((entry) => {
@@ -459,7 +465,7 @@ export function Home() {
                                             onClick={(e) => handleDelete(e, entry)}
                                             aria-label="Remove from continue watching"
                                         >
-                                            <X size={16} strokeWidth={2.5} />
+                                            <X size={14} strokeWidth={2.5} />
                                         </button>
                                         <div className="continue-watching-overlay">
                                             <span className="continue-watching-title">
@@ -467,9 +473,9 @@ export function Home() {
                                             </span>
                                             <span className="continue-watching-meta">
                                                 {isTV
-                                                    ? (entry.nextEpisode
+                                                    ? entry.nextEpisode
                                                         ? `Watch S${entry.nextEpisode.seasonNumber}E${entry.nextEpisode.episodeNumber}`
-                                                        : `Continue S${entry.history.season_number || 1}E${entry.history.episode_number || 1}`)
+                                                        : `Continue S${entry.history.season_number || 1}E${entry.history.episode_number || 1}`
                                                     : formatRemaining(entry.history)}
                                             </span>
                                         </div>
@@ -487,23 +493,142 @@ export function Home() {
                     </section>
                 )}
 
-                <ContentRow
-                    title="Trending Now"
-                    items={trending}
-                />
-                <ContentRow
-                    title="Popular Movies"
-                    items={popularMovies}
-                />
-                <ContentRow
-                    title="Popular TV Shows"
-                    items={popularTVShows}
-                />
-                <ContentRow
-                    title="Top Rated Movies"
-                    items={topRatedMovies}
-                />
+                {/* ── What's Burning (Top 3) ── */}
+                {topThreeTrending.length > 0 && (
+                    <section className="home-section top3-section">
+                        <div className="home-section-header">
+                            <div className="home-section-label">Right Now</div>
+                            <h2 className="home-section-title">What's Burning</h2>
+                            <div className="home-section-rule" />
+                        </div>
+                        <div className="top3-grid">
+                            {topThreeTrending.map((item, index) => {
+                                const mediaType = getMediaType(item);
+                                const title = getTitle(item);
+                                const backdrop = getBackdropUrl(item.backdrop_path || item.poster_path, 'large');
+                                return (
+                                    <button
+                                        key={`${mediaType}-${item.id}`}
+                                        className="top3-card"
+                                        onClick={() => navigate(`/details/${mediaType}/${item.id}`)}
+                                        aria-label={`Open ${title}`}
+                                    >
+                                        <span className="top3-rank-bg" aria-hidden="true">{index + 1}</span>
+                                        <div className="top3-media">
+                                            <img className="top3-poster" src={backdrop} alt={title} loading="lazy" />
+                                            <div className="top3-overlay" />
+                                            <div className="top3-meta">
+                                                <h3 className="top3-title">{title}</h3>
+                                                <span className="top3-subtitle">
+                                                    {mediaType.toUpperCase()} · {getReleaseYear(item)}
+                                                </span>
+                                            </div>
+                                            <span className="top3-chip">Top Pick</span>
+                                        </div>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </section>
+                )}
+
+                {/* ── Trending Now ── */}
+                <section className="home-section">
+                    <div className="home-section-header">
+                        <div className="home-section-label">Trending</div>
+                        <h2 className="home-section-title">Trending Now</h2>
+                        <div className="home-section-rule" />
+                    </div>
+                    <ContentRow title="" items={trending} />
+                </section>
+
+                {moodGrid.length > 0 && (
+                    <section className="home-section mood-section">
+                        <div className="home-section-header">
+                            <div className="home-section-label">Browse by Mood</div>
+                            <h2 className="home-section-title">How Are You Feeling?</h2>
+                            <div className="home-section-rule" />
+                        </div>
+
+                        <div className="mood-chip-row">
+                            {moodChips.map((chip) => (
+                                <button
+                                    key={chip}
+                                    type="button"
+                                    className={`mood-chip ${chip === selectedMood ? 'active' : ''}`}
+                                    onClick={() => setSelectedMood(chip)}
+                                    aria-pressed={chip === selectedMood}
+                                >
+                                    {chip}
+                                </button>
+                            ))}
+                        </div>
+
+                        <div className="mood-editorial-grid">
+                            {moodGrid.map((item, index) => {
+                                const mediaType = getMediaType(item);
+                                const year = getReleaseYear(item);
+                                const title = getTitle(item);
+                                const rating = Number.isFinite(item.vote_average) ? item.vote_average.toFixed(1) : 'N/A';
+                                return (
+                                    <button
+                                        key={`mood-${mediaType}-${item.id}`}
+                                        type="button"
+                                        className="mood-editorial-item"
+                                        onClick={() => navigate(`/details/${mediaType}/${item.id}`)}
+                                    >
+                                        <span className="mood-item-rank">{index + 1}</span>
+                                        <img
+                                            className="mood-item-poster"
+                                            src={getPosterUrl(item.poster_path, 'medium')}
+                                            alt={title}
+                                            loading="lazy"
+                                        />
+                                        <span className="mood-item-info">
+                                            <span className="mood-item-title">{title}</span>
+                                            <span className="mood-item-meta">
+                                                {mediaType.toUpperCase()} · {year} · ★ {rating}
+                                            </span>
+                                        </span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </section>
+                )}
+
+                {/* ── Popular Movies ── */}
+                <section className="home-section">
+                    <div className="home-section-header">
+                        <div className="home-section-label">Cinema</div>
+                        <h2 className="home-section-title">Popular Movies</h2>
+                        <div className="home-section-rule" />
+                    </div>
+                    <ContentRow title="" items={popularMovies} />
+                </section>
+
+                {/* ── Popular TV Shows ── */}
+                <section className="home-section">
+                    <div className="home-section-header">
+                        <div className="home-section-label">Television</div>
+                        <h2 className="home-section-title">Popular TV Shows</h2>
+                        <div className="home-section-rule" />
+                    </div>
+                    <ContentRow title="" items={popularTVShows} />
+                </section>
+
+                {/* ── Top Rated ── */}
+                <section className="home-section">
+                    <div className="home-section-header">
+                        <div className="home-section-label">Acclaimed</div>
+                        <h2 className="home-section-title">Top Rated Movies</h2>
+                        <div className="home-section-rule" />
+                    </div>
+                    <ContentRow title="" items={topRatedMovies} />
+                </section>
+
             </div>
+
             <Footer />
         </div>
     );

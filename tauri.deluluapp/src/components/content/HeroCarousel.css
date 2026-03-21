@@ -1,6 +1,12 @@
-/* ============================================
-   HERO CAROUSEL - Premium Smooth Transitions
-   ============================================ */
+/* ============================================================
+   HERO CAROUSEL — Delulu Editorial Redesign
+   Cormorant Garamond serif titles · Premium red #E11D2E
+   All backdrop slide logic preserved 1:1
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap');
+
+/* ── Container ─────────────────────────────────────────────── */
 
 .hero-carousel {
     position: relative;
@@ -17,9 +23,7 @@
     cursor: grabbing;
 }
 
-/* ============================================
-   BACKDROP - Smooth Crossfade Transition
-   ============================================ */
+/* ── Backdrop — identical class names & transitions to original ── */
 
 .hero-backdrop {
     position: absolute;
@@ -61,99 +65,124 @@
 }
 
 @keyframes heroBackdropKenBurns {
-    from {
-        transform: scale(1) translate3d(0, 0, 0);
-        background-position: center top;
-    }
-
-    to {
-        transform: scale(1.1) translate3d(0, -2.2%, 0);
-        background-position: center 8%;
-    }
+    from { transform: scale(1) translate3d(0, 0, 0); background-position: center top; }
+    to   { transform: scale(1.08) translate3d(0, -2.2%, 0); background-position: center 8%; }
 }
 
 @keyframes heroSlideInFromRight {
-    from {
-        transform: translate3d(24%, 0, 0) scale(1.06);
-        opacity: 0.9;
-    }
-    to {
-        transform: translate3d(0, 0, 0) scale(1);
-        opacity: 1;
-    }
+    from { transform: translate3d(24%, 0, 0) scale(1.06); opacity: 0.9; }
+    to   { transform: translate3d(0, 0, 0) scale(1); opacity: 1; }
 }
 
 @keyframes heroSlideOutToLeft {
-    from {
-        transform: translate3d(0, 0, 0) scale(1);
-        opacity: 1;
-    }
-    to {
-        transform: translate3d(-20%, 0, 0) scale(1.03);
-        opacity: 0.85;
-    }
+    from { transform: translate3d(0, 0, 0) scale(1); opacity: 1; }
+    to   { transform: translate3d(-20%, 0, 0) scale(1.03); opacity: 0.85; }
 }
 
 @keyframes heroSlideInFromLeft {
-    from {
-        transform: translate3d(-24%, 0, 0) scale(1.06);
-        opacity: 0.9;
-    }
-    to {
-        transform: translate3d(0, 0, 0) scale(1);
-        opacity: 1;
-    }
+    from { transform: translate3d(-24%, 0, 0) scale(1.06); opacity: 0.9; }
+    to   { transform: translate3d(0, 0, 0) scale(1); opacity: 1; }
 }
 
 @keyframes heroSlideOutToRight {
-    from {
-        transform: translate3d(0, 0, 0) scale(1);
-        opacity: 1;
-    }
-    to {
-        transform: translate3d(20%, 0, 0) scale(1.03);
-        opacity: 0.85;
-    }
+    from { transform: translate3d(0, 0, 0) scale(1); opacity: 1; }
+    to   { transform: translate3d(20%, 0, 0) scale(1.03); opacity: 0.85; }
 }
 
-/* Gradient overlay */
+/* ── Gradient overlays ─────────────────────────────────────── */
+
+/* Left vignette — heavier than original to anchor content */
 .hero-gradient {
     position: absolute;
     inset: 0;
-    background: linear-gradient(to right,
-            rgba(0, 0, 0, 0.9) 0%,
-            rgba(0, 0, 0, 0.7) 30%,
-            rgba(0, 0, 0, 0.3) 60%,
-            transparent 100%);
+    background:
+        radial-gradient(
+            142% 112% at -14% 50%,
+            rgba(7, 8, 11, 0.6) 0%,
+            rgba(7, 8, 11, 0.4) 36%,
+            rgba(7, 8, 11, 0.2) 58%,
+            rgba(7, 8, 11, 0.08) 72%,
+            transparent 90%
+        ),
+        linear-gradient(
+            to right,
+            rgba(7, 8, 11, 0.22) 0%,
+            rgba(7, 8, 11, 0.12) 22%,
+            transparent 46%
+        );
     z-index: 1;
 }
 
-.hero-gradient::after {
-    content: '';
+/* Bottom fade — merges hero into home-content */
+.hero-gradient-bottom {
     position: absolute;
     left: 0;
     right: 0;
     bottom: 0;
-    height: 300px;
-    background: linear-gradient(to top, var(--color-bg-primary) 0%, transparent 100%);
+    height: 340px;
+    background: linear-gradient(to top, #0a0808 0%, rgba(10, 8, 8, 0.7) 45%, transparent 100%);
+    z-index: 2;
+    pointer-events: none;
 }
 
-/* ============================================
-   CONTENT - Staggered Slide-In Animations
-   ============================================ */
+/* ── Floating poster (right side) ──────────────────────────── */
+/* ── Content block ─────────────────────────────────────────── */
 
 .hero-content {
     position: absolute;
-    left: var(--spacing-3xl);
-    bottom: 31%;
-    max-width: 600px;
+    left: clamp(32px, 4vw, 64px);
+    bottom: 20%;
+    max-width: clamp(340px, 44vw, 580px);
     z-index: 10;
 }
+
+/* ── Eyebrow label ─────────────────────────────────────────── */
+
+.hero-eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 18px;
+}
+
+.hero-eyebrow-text {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 10px;
+    font-weight: 400;
+    letter-spacing: 0.24em;
+    color: rgba(235, 70, 86, 0.98);
+    text-transform: uppercase;
+}
+
+.hero-eyebrow-line {
+    display: block;
+    width: 28px;
+    height: 0.5px;
+    background: rgba(235, 70, 86, 0.98);
+    opacity: 0.92;
+}
+
+/* ── Title — Cormorant Garamond serif ──────────────────────── */
+
+.hero-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: clamp(46px, 6.2vw, 82px);
+    font-weight: 300;
+    line-height: 0.95;
+    letter-spacing: -0.01em;
+    color: rgba(253, 250, 245, 0.99);
+    margin-bottom: 20px;
+    min-height: 1em;
+    text-shadow: 0 6px 26px rgba(0, 0, 0, 0.82), 0 0 2px rgba(255, 255, 255, 0.2);
+}
+
+/* ── Meta row ──────────────────────────────────────────────── */
 
 .hero-text-reveal {
     opacity: 0;
     transform: translateY(8px);
-    transition: opacity 560ms cubic-bezier(0.22, 1, 0.36, 1), transform 560ms cubic-bezier(0.22, 1, 0.36, 1);
+    transition: opacity 560ms cubic-bezier(0.22, 1, 0.36, 1),
+                transform 560ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .hero-text-reveal.is-visible {
@@ -161,221 +190,177 @@
     transform: translateY(0);
 }
 
-/* Tag - Fade + Slide from bottom */
-.hero-tag {
-    display: inline-block;
-    padding: var(--spacing-xs) var(--spacing-md);
-    background: var(--color-accent-primary);
-    color: var(--color-text-primary);
-    font-size: var(--font-size-xs);
-    font-weight: 700;
-    letter-spacing: 1px;
-    border-radius: var(--radius-sm);
-    margin-bottom: var(--spacing-md);
-}
-
-/* Title - Fade + Slide from left */
-.hero-title {
-    font-size: var(--font-size-5xl);
-    font-weight: 800;
-    line-height: 1.1;
-    margin-bottom: var(--spacing-md);
-    text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.8);
-    animation: none;
-    min-height: 1.1em;
-}
-
-/* Meta - Staggered fade in */
 .hero-meta {
     display: flex;
     align-items: center;
-    gap: var(--spacing-md);
-    margin-bottom: var(--spacing-md);
-    font-size: var(--font-size-sm);
-    animation: none;
-}
-
-@keyframes fadeIn {
-    from {
-        opacity: 0;
-    }
-
-    to {
-        opacity: 1;
-    }
+    gap: 10px;
+    margin-bottom: 16px;
 }
 
 .hero-rating {
-    color: #46d369;
-    font-weight: 600;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 12px;
+    font-weight: 400;
+    color: rgba(244, 239, 231, 0.98);
+    display: flex;
+    align-items: center;
+    gap: 4px;
 }
 
 .hero-rating-star {
-    color: #FFD700;
-    margin-right: var(--spacing-xs);
-    display: inline-block;
-    animation: starPulse 2s ease-in-out infinite;
+    color: rgba(230, 88, 88, 1);
+    font-size: 11px;
+    animation: starPulse 3s ease-in-out infinite;
 }
 
 @keyframes starPulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.6; }
+}
 
-    0%,
-    100% {
-        transform: scale(1);
-        opacity: 1;
-    }
-
-    50% {
-        transform: scale(1.2);
-        opacity: 0.8;
-    }
+.hero-meta-dot {
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    background: rgba(232, 227, 220, 0.55);
+    flex-shrink: 0;
 }
 
 .hero-year {
-    color: var(--color-text-secondary);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 11px;
+    font-weight: 300;
+    letter-spacing: 0.08em;
+    color: rgba(232, 227, 220, 0.78);
+    text-transform: uppercase;
 }
 
 .hero-type {
-    background: rgba(255, 255, 255, 0.1);
-    padding: var(--spacing-xs) var(--spacing-sm);
-    border-radius: var(--radius-sm);
-    font-size: var(--font-size-xs);
-    font-weight: 600;
-    border: 1px solid var(--color-border);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 10px;
+    font-weight: 400;
+    letter-spacing: 0.14em;
+    color: rgba(238, 233, 226, 0.84);
+    text-transform: uppercase;
+    border: 0.5px solid rgba(232, 227, 220, 0.34);
+    padding: 3px 8px;
+    border-radius: 1px;
 }
 
-/* Overview - Delayed fade */
+/* ── Overview ──────────────────────────────────────────────── */
+
 .hero-overview {
-    color: var(--color-text-secondary);
-    font-size: var(--font-size-base);
-    line-height: 1.6;
-    margin-bottom: var(--spacing-lg);
-    text-shadow: 1px 1px 4px rgba(0, 0, 0, 0.8);
-    animation: none;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 300;
+    line-height: 1.7;
+    color: rgba(240, 235, 228, 0.83);
+    margin-bottom: 28px;
     min-height: 5.2em;
+    letter-spacing: 0.01em;
+    text-shadow: 0 2px 16px rgba(0, 0, 0, 0.75);
 }
 
-/* Buttons - Slide up with bounce */
+/* ── Buttons ───────────────────────────────────────────────── */
+
 .hero-buttons {
     display: flex;
-    gap: var(--spacing-md);
-    animation: none;
-    opacity: 1;
-    transform: none;
+    gap: 12px;
+    align-items: center;
 }
 
-.hero-play-btn {
-    background: var(--color-accent-primary);
-    box-shadow: none;
-    transform: none !important;
-    transition: none !important;
+.hero-btn-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 28px;
+    background: #E11D2E;
+    border: none;
+    border-radius: 2px;
+    color: #f0ebe3;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 11px;
+    font-weight: 400;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background 200ms ease, box-shadow 200ms ease;
 }
 
-.hero-play-btn:hover:not(:disabled) {
-    background: var(--color-accent-primary);
-    box-shadow: none;
-    transform: none !important;
+.hero-btn-primary:hover {
+    background: #f03a4a;
+    box-shadow: 0 0 28px rgba(225, 29, 46, 0.45);
 }
 
-.hero-play-btn svg {
-    margin-right: var(--spacing-xs);
-    transform: none !important;
-    transition: none !important;
+.hero-btn-ghost {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 24px;
+    background: transparent;
+    border: 0.5px solid rgba(232, 227, 220, 0.22);
+    border-radius: 2px;
+    color: rgba(232, 227, 220, 0.6);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 11px;
+    font-weight: 400;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    cursor: pointer;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    transition: border-color 200ms ease, color 200ms ease;
 }
 
-.hero-play-btn:hover svg {
-    transform: none;
+.hero-btn-ghost:hover {
+    border-color: rgba(232, 227, 220, 0.45);
+    color: rgba(232, 227, 220, 0.9);
 }
 
-.hero-more-info-btn {
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.08));
-    border: 1px solid rgba(255, 255, 255, 0.26);
-    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35);
-    backdrop-filter: blur(14px) saturate(130%);
-    -webkit-backdrop-filter: blur(14px) saturate(130%);
-    transform: none !important;
-    transition: none !important;
-}
-
-.hero-more-info-btn:hover:not(:disabled) {
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.08));
-    border-color: rgba(255, 255, 255, 0.26);
-    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35);
-    transform: none !important;
-}
-
-/* ============================================
-   DOTS NAVIGATION - Smooth Transitions
-   ============================================ */
+/* ── Dots navigation ───────────────────────────────────────── */
 
 .hero-dots {
     position: absolute;
-    bottom: var(--spacing-3xl);
+    bottom: clamp(20px, 3vh, 40px);
     left: 50%;
     transform: translateX(-50%);
     display: flex;
-    gap: var(--spacing-sm);
+    gap: 6px;
     z-index: 10;
     animation: fadeIn 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.6s backwards;
 }
 
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
 .hero-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: var(--radius-full);
-    background: rgba(255, 255, 255, 0.4);
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: rgba(232, 227, 220, 0.2);
     border: none;
     cursor: pointer;
     transition: all 0.4s cubic-bezier(0.22, 1, 0.36, 1);
-    position: relative;
-}
-
-.hero-dot::before {
-    content: '';
-    position: absolute;
-    inset: -4px;
-    border-radius: var(--radius-full);
-    background: transparent;
-    transition: background 0.3s ease;
+    padding: 0;
 }
 
 .hero-dot:hover {
-    background: rgba(255, 255, 255, 0.6);
-    transform: scale(1.2);
-}
-
-.hero-dot:hover::before {
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(232, 227, 220, 0.45);
 }
 
 .hero-dot-active {
-    width: 24px;
-    background: var(--color-accent-primary);
-    box-shadow: 0 0 12px var(--color-accent-primary);
+    width: 22px;
+    background: #E11D2E;
+    opacity: 0.85;
 }
 
-/* ============================================
-   TRANSITION STATES - Reset Animations
-   ============================================ */
-
-/* When transitioning, reset content animations to replay */
-.hero-carousel-dragging .hero-content>* {
-    animation: none !important;
-}
-
-
-/* ============================================
-   RESPONSIVE - Mobile Optimized
-   ============================================ */
+/* ── Responsive ────────────────────────────────────────────── */
 
 @media (max-width: 1024px) {
     .hero-content {
-        left: var(--spacing-xl);
-        max-width: 500px;
-    }
-
-    .hero-title {
-        font-size: var(--font-size-4xl);
+        max-width: 480px;
     }
 }
 
@@ -386,26 +371,23 @@
     }
 
     .hero-content {
-        left: var(--spacing-md);
-        right: var(--spacing-md);
+        left: var(--spacing-md, 16px);
+        right: var(--spacing-md, 16px);
         max-width: none;
-        bottom: 24%;
+        bottom: 16%;
     }
 
     .hero-title {
-        font-size: var(--font-size-3xl);
+        font-size: clamp(38px, 10vw, 52px);
     }
 
     .hero-gradient {
-        background: linear-gradient(to top,
-                rgba(0, 0, 0, 0.95) 0%,
-                rgba(0, 0, 0, 0.7) 50%,
-                transparent 100%);
-    }
-
-    /* Simplify animations on mobile for performance */
-    .hero-backdrop {
-        transition: opacity 0.6s ease;
+        background: linear-gradient(
+            to top,
+            rgba(10, 8, 8, 0.95) 0%,
+            rgba(10, 8, 8, 0.7) 50%,
+            transparent 100%
+        );
     }
 
     .hero-backdrop-enter.hero-backdrop-next,
@@ -414,6 +396,11 @@
     .hero-backdrop-exit.hero-backdrop-prev {
         animation-duration: 900ms !important;
     }
+}
+
+/* ── Dragging state ────────────────────────────────────────── */
+.hero-carousel-dragging .hero-content > * {
+    animation: none !important;
 }
 
 

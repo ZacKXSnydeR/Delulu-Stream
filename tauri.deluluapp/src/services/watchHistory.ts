@@ -31,6 +31,7 @@ class WatchHistoryService {
     private syncInterval: number | null = null;
     private readonly SYNC_INTERVAL_MS = 5000;
     private readonly COMPLETION_THRESHOLD = 0.95;
+    private readonly CONTINUE_WATCHING_MIN_SECONDS = 8 * 60;
     private isSyncing = false;
 
     constructor() {
@@ -202,13 +203,13 @@ class WatchHistoryService {
                     ) as progress_percentage
                 FROM watch_history
                 WHERE user_id = 'local_user'
-                  AND current_time > 90
+                  AND current_time > $1
                   AND (
                       is_completed = 0
                       OR (is_completed = 1 AND media_type = 'tv')
                   )
                 ORDER BY last_watched_at DESC
-            `);
+            `, [this.CONTINUE_WATCHING_MIN_SECONDS]);
 
             const grouped = new Map<string, WatchHistoryItem>();
             const tvEpisodeCounts = new Map<number, number>();
@@ -235,6 +236,8 @@ class WatchHistoryService {
             }
 
             const results = Array.from(grouped.values())
+                // Hard guard: never show items below continue threshold
+                .filter(item => (item.current_time || 0) >= this.CONTINUE_WATCHING_MIN_SECONDS)
                 // Filter out completed movies (only completed TV episodes should pass through)
                 .filter(item => !(item.is_completed && item.media_type === 'movie'))
                 .map((item) => ({

@@ -241,6 +241,8 @@ export function DeluluPlayer({
     const progressRef = useRef<HTMLDivElement>(null);
     const settingsPanelRef = useRef<HTMLDivElement>(null);
     const subtitlePanelRef = useRef<HTMLDivElement>(null);
+    const subtitleOptionsRef = useRef<HTMLDivElement>(null);
+    const subtitleOptionsScrollTopRef = useRef(0);
     const suppressNextToggleRef = useRef(false);
     const hlsRef = useRef<Hls | null>(null);
     const currentQualityRef = useRef<number>(-1);
@@ -297,6 +299,16 @@ export function DeluluPlayer({
     const [currentQuality, setCurrentQuality] = useState<number>(-1);
     const [isHLS, setIsHLS] = useState(false);
     const [isPiP, setIsPiP] = useState(false);
+
+    useEffect(() => {
+        if (!showSubtitleSettings) return;
+        const restore = () => {
+            if (subtitleOptionsRef.current) {
+                subtitleOptionsRef.current.scrollTop = subtitleOptionsScrollTopRef.current;
+            }
+        };
+        requestAnimationFrame(restore);
+    }, [showSubtitleSettings]);
 
     const togglePiP = async () => {
         if (!videoRef.current) return;
@@ -1144,7 +1156,7 @@ export function DeluluPlayer({
                                 Next in {secondsUntilAutoNext}s
                             </button>
                         )}
-                        {subtitles.length > 0 && <button className={`delulu-btn ${activeSubtitle >= 0 ? 'active' : ''}`} onClick={() => setShowSubtitleSettings(!showSubtitleSettings)}><Subtitles size={20} /></button>}
+                        {subtitles.length > 0 && <button className={`delulu-btn ${activeSubtitle >= 0 ? 'active' : ''}`} onClick={() => setShowSubtitleSettings((v) => !v)}><Subtitles size={20} /></button>}
                         <button className={`delulu-btn ${isPiP ? 'active' : ''}`} onClick={togglePiP} title="Picture in Picture"><PictureInPicture size={20} /></button>
                         {showQualitySelector && isHLS && qualities.length > 0 && (
                             <button className="delulu-btn" onClick={() => setShowSettings(!showSettings)}>
@@ -1160,7 +1172,14 @@ export function DeluluPlayer({
             {showSettings && (
                 <div ref={settingsPanelRef} className="delulu-panel delulu-settings-panel">
                     <div className="delulu-panel-header"><span>Quality</span><button onClick={() => setShowSettings(false)}><X size={18} /></button></div>
-                    <div className="delulu-panel-options" data-lenis-prevent="true">
+                    <div
+                        ref={subtitleOptionsRef}
+                        className="delulu-panel-options delulu-panel-options-subtitles"
+                        data-lenis-prevent="true"
+                        onScroll={(e) => {
+                            subtitleOptionsScrollTopRef.current = e.currentTarget.scrollTop;
+                        }}
+                    >
                         <button className={`delulu-option ${currentQuality === -1 ? 'active' : ''}`} onClick={() => handleQualityChange(-1)}><span>Auto</span>{currentQuality === -1 && <Check size={16} />}</button>
                         {qualities.map((q) => (<button key={q.index} className={`delulu-option ${currentQuality === q.index ? 'active' : ''}`} onClick={() => handleQualityChange(q.index)}><span>{q.height}p</span>{currentQuality === q.index && <Check size={16} />}</button>))}
                     </div>

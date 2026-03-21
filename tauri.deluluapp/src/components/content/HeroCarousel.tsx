@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     type TMDBContent,
@@ -14,8 +14,24 @@ interface HeroCarouselProps {
     autoPlayInterval?: number;
 }
 
+interface HeroCarouselCacheState {
+    signature: string;
+    currentIndex: number;
+    typedTitle: string;
+    typedOverview: string;
+    showMeta: boolean;
+}
+
+let cachedHeroCarouselState: HeroCarouselCacheState | null = null;
+
 export function HeroCarousel({ items, autoPlayInterval = 8000 }: HeroCarouselProps) {
-    const [currentIndex, setCurrentIndex] = useState(0);
+    const itemsSignature = items.map((item) => `${getMediaType(item)}-${item.id}`).join('|');
+    const hasValidCache =
+        !!cachedHeroCarouselState &&
+        cachedHeroCarouselState.signature === itemsSignature &&
+        cachedHeroCarouselState.currentIndex >= 0 &&
+        cachedHeroCarouselState.currentIndex < items.length;
+    const [currentIndex, setCurrentIndex] = useState(hasValidCache ? cachedHeroCarouselState!.currentIndex : 0);
     const [isTransitioning, setIsTransitioning] = useState(false);
     const [transitionFromIndex, setTransitionFromIndex] = useState<number | null>(null);
     const [transitionToIndex, setTransitionToIndex] = useState<number | null>(null);
@@ -41,14 +57,26 @@ export function HeroCarousel({ items, autoPlayInterval = 8000 }: HeroCarouselPro
     const activeMediaType = activeItem ? getMediaType(activeItem) : null;
 
     // Typewriter text state
-    const [typedTitle, setTypedTitle] = useState('');
-    const [typedOverview, setTypedOverview] = useState('');
-    const [showMeta, setShowMeta] = useState(false);
+    const [typedTitle, setTypedTitle] = useState(hasValidCache ? cachedHeroCarouselState!.typedTitle : '');
+    const [typedOverview, setTypedOverview] = useState(hasValidCache ? cachedHeroCarouselState!.typedOverview : '');
+    const [showMeta, setShowMeta] = useState(hasValidCache ? cachedHeroCarouselState!.showMeta : false);
 
     const TRANSITION_MS = 1000;
     const TITLE_TYPE_MS = 42;
     const OVERVIEW_TYPE_MS = 18;
 
+    useEffect(() => {
+        if (!items.length) return;
+        cachedHeroCarouselState = {
+            signature: itemsSignature,
+            currentIndex,
+            typedTitle,
+            typedOverview,
+            showMeta,
+        };
+    }, [items.length, itemsSignature, currentIndex, typedTitle, typedOverview, showMeta]);
+
+    // ── Auto-advance ──────────────────────────────────────────────
     useEffect(() => {
         if (items.length <= 1) return;
 
@@ -66,48 +94,46 @@ export function HeroCarousel({ items, autoPlayInterval = 8000 }: HeroCarouselPro
         };
     }, [currentIndex, items.length, autoPlayInterval, isTransitioning]);
 
-    // Global cleanup on unmount only. Do not tie this to transition state.
+    // ── Global cleanup on unmount ─────────────────────────────────
     useEffect(() => {
         return () => {
-            if (intervalRef.current) {
-                clearInterval(intervalRef.current);
-                intervalRef.current = null;
-            }
-            if (transitionTimeoutRef.current) {
-                clearTimeout(transitionTimeoutRef.current);
-                transitionTimeoutRef.current = null;
-            }
-            if (titleIntervalRef.current) {
-                clearInterval(titleIntervalRef.current);
-                titleIntervalRef.current = null;
-            }
-            if (overviewIntervalRef.current) {
-                clearInterval(overviewIntervalRef.current);
-                overviewIntervalRef.current = null;
-            }
-            if (revealTimeoutRef.current) {
-                clearTimeout(revealTimeoutRef.current);
-                revealTimeoutRef.current = null;
-            }
-            if (typingUnlockTimeoutRef.current) {
-                clearTimeout(typingUnlockTimeoutRef.current);
-                typingUnlockTimeoutRef.current = null;
-            }
+            if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
+            if (transitionTimeoutRef.current) { clearTimeout(transitionTimeoutRef.current); transitionTimeoutRef.current = null; }
+            if (titleIntervalRef.current) { clearInterval(titleIntervalRef.current); titleIntervalRef.current = null; }
+            if (overviewIntervalRef.current) { clearInterval(overviewIntervalRef.current); overviewIntervalRef.current = null; }
+            if (revealTimeoutRef.current) { clearTimeout(revealTimeoutRef.current); revealTimeoutRef.current = null; }
+            if (typingUnlockTimeoutRef.current) { clearTimeout(typingUnlockTimeoutRef.current); typingUnlockTimeoutRef.current = null; }
         };
     }, []);
 
+    // ── Typewriter effect ─────────────────────────────────────────
     useEffect(() => {
         if (!activeItem) return;
-
-        if (titleIntervalRef.current) clearInterval(titleIntervalRef.current);
-        if (overviewIntervalRef.current) clearInterval(overviewIntervalRef.current);
-        if (revealTimeoutRef.current) clearTimeout(revealTimeoutRef.current);
-        if (typingUnlockTimeoutRef.current) clearTimeout(typingUnlockTimeoutRef.current);
 
         const fullTitle = getTitle(activeItem);
         const fullOverview = activeItem.overview.length > 200
             ? `${activeItem.overview.substring(0, 200)}...`
             : activeItem.overview;
+
+        const cachedForCurrentItem =
+            hasValidCache &&
+            cachedHeroCarouselState?.currentIndex === activeIndex &&
+            cachedHeroCarouselState?.typedTitle === fullTitle &&
+            cachedHeroCarouselState?.typedOverview === fullOverview &&
+            cachedHeroCarouselState?.showMeta;
+
+        if (cachedForCurrentItem) {
+            typingCompleteRef.current = true;
+            setTypedTitle(fullTitle);
+            setTypedOverview(fullOverview);
+            setShowMeta(true);
+            return;
+        }
+
+        if (titleIntervalRef.current) clearInterval(titleIntervalRef.current);
+        if (overviewIntervalRef.current) clearInterval(overviewIntervalRef.current);
+        if (revealTimeoutRef.current) clearTimeout(revealTimeoutRef.current);
+        if (typingUnlockTimeoutRef.current) clearTimeout(typingUnlockTimeoutRef.current);
 
         setTypedTitle('');
         setTypedOverview('');
@@ -130,10 +156,7 @@ export function HeroCarousel({ items, autoPlayInterval = 8000 }: HeroCarouselPro
             setTypedTitle(fullTitle.slice(0, titleCursor));
 
             if (titleCursor >= fullTitle.length) {
-                if (titleIntervalRef.current) {
-                    clearInterval(titleIntervalRef.current);
-                    titleIntervalRef.current = null;
-                }
+                if (titleIntervalRef.current) { clearInterval(titleIntervalRef.current); titleIntervalRef.current = null; }
                 setShowMeta(true);
 
                 revealTimeoutRef.current = setTimeout(() => {
@@ -143,15 +166,9 @@ export function HeroCarousel({ items, autoPlayInterval = 8000 }: HeroCarouselPro
                         setTypedOverview(fullOverview.slice(0, overviewCursor));
 
                         if (overviewCursor >= fullOverview.length) {
-                            if (overviewIntervalRef.current) {
-                                clearInterval(overviewIntervalRef.current);
-                                overviewIntervalRef.current = null;
-                            }
+                            if (overviewIntervalRef.current) { clearInterval(overviewIntervalRef.current); overviewIntervalRef.current = null; }
                             typingCompleteRef.current = true;
-                            if (typingUnlockTimeoutRef.current) {
-                                clearTimeout(typingUnlockTimeoutRef.current);
-                                typingUnlockTimeoutRef.current = null;
-                            }
+                            if (typingUnlockTimeoutRef.current) { clearTimeout(typingUnlockTimeoutRef.current); typingUnlockTimeoutRef.current = null; }
                         }
                     }, OVERVIEW_TYPE_MS);
                 }, 120);
@@ -166,6 +183,7 @@ export function HeroCarousel({ items, autoPlayInterval = 8000 }: HeroCarouselPro
         };
     }, [activeIndex, activeItem]);
 
+    // ── Slide transition ──────────────────────────────────────────
     const startSlideTransition = (direction: 'next' | 'prev') => {
         if (isTransitioning || items.length <= 1) return;
 
@@ -189,77 +207,38 @@ export function HeroCarousel({ items, autoPlayInterval = 8000 }: HeroCarouselPro
         }, TRANSITION_MS);
     };
 
-    const handleNext = () => {
-        startSlideTransition('next');
-    };
+    const handleNext = () => startSlideTransition('next');
+    const handlePrev = () => startSlideTransition('prev');
 
-    const handlePrev = () => {
-        startSlideTransition('prev');
-    };
-
-    // Swipe/Drag handlers
+    // ── Swipe / drag handlers ─────────────────────────────────────
     const handleDragStart = (clientX: number) => {
         setDragStart(clientX);
         setIsDragging(true);
-        if (intervalRef.current) {
-            clearInterval(intervalRef.current);
-        }
+        if (intervalRef.current) clearInterval(intervalRef.current);
     };
 
     const handleDragEnd = (clientX: number) => {
         if (dragStart === null) return;
-
         const diff = dragStart - clientX;
-        const threshold = 50; // Minimum swipe distance
-
-        if (Math.abs(diff) > threshold) {
-            if (diff > 0) {
-                handleNext(); // Swipe left -> next
-            } else {
-                handlePrev(); // Swipe right -> previous
-            }
+        if (Math.abs(diff) > 50) {
+            diff > 0 ? handleNext() : handlePrev();
         }
-
         setDragStart(null);
         setIsDragging(false);
     };
 
-    // Mouse events
-    const handleMouseDown = (e: React.MouseEvent) => {
-        handleDragStart(e.clientX);
-    };
-
-    const handleMouseUp = (e: React.MouseEvent) => {
-        handleDragEnd(e.clientX);
-    };
-
+    const handleMouseDown = (e: React.MouseEvent) => handleDragStart(e.clientX);
+    const handleMouseUp = (e: React.MouseEvent) => handleDragEnd(e.clientX);
     const handleMouseLeave = () => {
-        if (isDragging && dragStart !== null) {
-            setDragStart(null);
-            setIsDragging(false);
-        }
+        if (isDragging && dragStart !== null) { setDragStart(null); setIsDragging(false); }
     };
-
-    // Touch events
-    const handleTouchStart = (e: React.TouchEvent) => {
-        handleDragStart(e.touches[0].clientX);
-    };
-
+    const handleTouchStart = (e: React.TouchEvent) => handleDragStart(e.touches[0].clientX);
     const handleTouchEnd = (e: React.TouchEvent) => {
-        if (e.changedTouches.length > 0) {
-            handleDragEnd(e.changedTouches[0].clientX);
-        }
+        if (e.changedTouches.length > 0) handleDragEnd(e.changedTouches[0].clientX);
     };
 
-    const handlePlayClick = () => {
-        const mediaType = getMediaType(activeItem);
-        navigate(`/details/${mediaType}/${activeItem.id}`);
-    };
-
-    const handleMoreInfoClick = () => {
-        const mediaType = getMediaType(activeItem);
-        navigate(`/details/${mediaType}/${activeItem.id}`);
-    };
+    const handlePlayClick = () => navigate(`/details/${getMediaType(activeItem)}/${activeItem.id}`);
+    const handleMoreInfoClick = () => navigate(`/details/${getMediaType(activeItem)}/${activeItem.id}`);
 
     if (!activeItem) return null;
 
@@ -272,13 +251,12 @@ export function HeroCarousel({ items, autoPlayInterval = 8000 }: HeroCarouselPro
             onTouchStart={handleTouchStart}
             onTouchEnd={handleTouchEnd}
         >
+            {/* ── Backdrop images (same slide logic, same class names) ── */}
             {!isTransitioning && (
                 <div
                     key={`hero-backdrop-static-${currentIndex}`}
                     className="hero-backdrop hero-backdrop-static"
-                    style={{
-                        backgroundImage: `url(${getBackdropUrl(activeItem.backdrop_path, 'original')})`,
-                    }}
+                    style={{ backgroundImage: `url(${getBackdropUrl(activeItem.backdrop_path, 'original')})` }}
                 />
             )}
 
@@ -287,59 +265,91 @@ export function HeroCarousel({ items, autoPlayInterval = 8000 }: HeroCarouselPro
                     <div
                         key={`hero-backdrop-exit-${transitionFromIndex}`}
                         className={`hero-backdrop hero-backdrop-slide hero-backdrop-exit hero-backdrop-${transitionDirection}`}
-                        style={{
-                            backgroundImage: `url(${getBackdropUrl(items[transitionFromIndex].backdrop_path, 'original')})`,
-                        }}
+                        style={{ backgroundImage: `url(${getBackdropUrl(items[transitionFromIndex].backdrop_path, 'original')})` }}
                     />
                     <div
                         key={`hero-backdrop-enter-${transitionToIndex}`}
                         className={`hero-backdrop hero-backdrop-slide hero-backdrop-enter hero-backdrop-${transitionDirection}`}
-                        style={{
-                            backgroundImage: `url(${getBackdropUrl(items[transitionToIndex].backdrop_path, 'original')})`,
-                        }}
+                        style={{ backgroundImage: `url(${getBackdropUrl(items[transitionToIndex].backdrop_path, 'original')})` }}
                     />
                 </>
             )}
 
+            {/* ── Gradient overlays ── */}
             <div className="hero-gradient" />
-            <div className="hero-content">
-                <span className="hero-tag">
-                    Featured {activeMediaType === 'movie' ? 'Movie' : 'Series'}
-                </span>
+            <div className="hero-gradient-bottom" />
 
-                <h1 className="hero-title">
-                    {typedTitle}
-                </h1>
+            {/* ── Content ── */}
+            <div className="hero-content">
+                <div className="hero-eyebrow">
+                    <span className="hero-eyebrow-text">
+                        Featured {activeMediaType === 'movie' ? 'Movie' : 'Series'}
+                    </span>
+                    <span className="hero-eyebrow-line" />
+                </div>
+
+                <h1 className="hero-title">{typedTitle}</h1>
 
                 <div className={`hero-meta hero-text-reveal ${showMeta ? 'is-visible' : ''}`}>
                     <span className="hero-rating">
                         <span className="hero-rating-star">★</span>
-                        {activeItem.vote_average.toFixed(1)}% Match
+                        {activeItem.vote_average.toFixed(1)}
                     </span>
+                    <span className="hero-meta-dot" />
                     <span className="hero-year">{getReleaseYear(activeItem)}</span>
+                    <span className="hero-meta-dot" />
                     <span className="hero-type">
-                        {activeMediaType === 'movie' ? 'MOVIE' : 'TV SERIES'}
+                        {activeMediaType === 'movie' ? 'MOVIE' : 'SERIES'}
                     </span>
                 </div>
 
                 <p className="hero-overview">{typedOverview}</p>
 
                 <div className="hero-buttons">
-                    <button className="btn btn-primary btn-lg hero-play-btn" onClick={handlePlayClick}>
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <button className="hero-btn-primary" onClick={handlePlayClick}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
                             <path d="M8 5v14l11-7z" />
                         </svg>
                         Play Now
                     </button>
-                    <button className="btn btn-secondary btn-lg hero-more-info-btn" onClick={handleMoreInfoClick}>
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <circle cx="12" cy="12" r="10" />
-                            <path d="M12 16v-4M12 8h.01" />
+                    <button className="hero-btn-ghost" onClick={handleMoreInfoClick}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="12" cy="12" r="9" />
+                            <path d="M12 8v4M12 16h.01" />
                         </svg>
                         More Info
                     </button>
                 </div>
             </div>
+
+            {/* ── Dot navigation ── */}
+            {items.length > 1 && (
+                <div className="hero-dots">
+                    {items.map((_, i) => (
+                        <button
+                            key={i}
+                            className={`hero-dot ${i === activeIndex ? 'hero-dot-active' : ''}`}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                if (i !== currentIndex && !isTransitioning) {
+                                    const dir = i > currentIndex ? 'next' : 'prev';
+                                    setTransitionDirection(dir);
+                                    setTransitionFromIndex(currentIndex);
+                                    setTransitionToIndex(i);
+                                    setIsTransitioning(true);
+                                    transitionTimeoutRef.current = setTimeout(() => {
+                                        setCurrentIndex(i);
+                                        setTransitionFromIndex(null);
+                                        setTransitionToIndex(null);
+                                        setIsTransitioning(false);
+                                    }, TRANSITION_MS);
+                                }
+                            }}
+                            aria-label={`Go to slide ${i + 1}`}
+                        />
+                    ))}
+                </div>
+            )}
         </div>
     );
 }
