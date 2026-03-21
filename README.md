@@ -66,6 +66,7 @@ npm run tauri build -- --target x86_64-pc-windows-msvc --bundles msi
 
 ## Important Disclaimer
 - This is a partially vibe-coded project. Bugs, rough edges, and mistakes can happen.
+- If you encounter errors, please view them with patience and kindness while the project keeps improving.
 - Delulu Stream does **not** host or own any video content.
 - If a title does not play or content is unavailable, that is usually a provider-side issue.
 - If you can add and maintain a new provider, contributions are very welcome.
