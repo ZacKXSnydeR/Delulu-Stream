@@ -78,10 +78,16 @@ npm run tauri build -- --target x86_64-pc-windows-msvc --bundles msi
 This project is licensed under the MIT License. See [LICENSE](./LICENSE).
 
 ## Screenshots
-![Home](./Screenshots/Screenshot%202026-03-21%20152718.png)
-![Details](./Screenshots/Screenshot%202026-03-21%20152725.png)
-![Player](./Screenshots/Screenshot%202026-03-21%20152737.png)
-![Search](./Screenshots/Screenshot%202026-03-21%20152802.png)
-![Browse](./Screenshots/Screenshot%202026-03-21%20152836.png)
-![Mini Player](./Screenshots/Screenshot%202026-03-21%20152920.png)
-![Settings](./Screenshots/Screenshot%202026-03-21%20153154.png)
+![Home](./Screenshots/home.png)
+![Home 1](./Screenshots/home1.png)
+![Home 2](./Screenshots/home2.png)
+![Home 3](./Screenshots/home3.png)
+![Movie](./Screenshots/movie.png)
+![Movie 1](./Screenshots/movie1.png)
+![Random](./Screenshots/random.png)
+![TV](./Screenshots/tv.png)
+![TV 1](./Screenshots/tv1.png)
+![TV Page](./Screenshots/tvpage1.png)
+![TV Page Alt](./Screenshots/TVpsge.png)
+![Player Page](./Screenshots/playerpage.png)
+![Pause](./Screenshots/pause.png)
