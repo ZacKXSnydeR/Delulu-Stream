@@ -139,6 +139,7 @@ export function Home() {
     const scrollRef = useRef<HTMLDivElement>(null);
     const [showLeftArrow, setShowLeftArrow] = useState(false);
     const [showRightArrow, setShowRightArrow] = useState(true);
+    const [showContinueWatchingNav, setShowContinueWatchingNav] = useState(false);
     const topThreeTrending = trending.slice(0, 3);
     const moodChips = ['Midnight Tension', 'Slow Burn', 'Cerebral', 'Pulse-Heavy', 'Lonely Nights', 'Cathartic'];
     const [selectedMood, setSelectedMood] = useState(moodChips[0]);
@@ -178,11 +179,17 @@ export function Home() {
         return pool.slice(0, 4);
     }, [trending, popularMovies, popularTVShows, topRatedMovies, selectedMood]);
 
-    const handleScroll = () => {
+    const updateContinueWatchingNavState = useCallback(() => {
         if (!scrollRef.current) return;
         const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current;
-        setShowLeftArrow(scrollLeft > 20);
-        setShowRightArrow(scrollLeft < scrollWidth - clientWidth - 20);
+        const hasOverflow = scrollWidth - clientWidth > 8;
+        setShowContinueWatchingNav(hasOverflow);
+        setShowLeftArrow(hasOverflow && scrollLeft > 20);
+        setShowRightArrow(hasOverflow && scrollLeft < scrollWidth - clientWidth - 20);
+    }, []);
+
+    const handleScroll = () => {
+        updateContinueWatchingNavState();
     };
 
     const scroll = (direction: 'left' | 'right') => {
@@ -343,6 +350,16 @@ export function Home() {
         };
     }, [fetchContinueWatching]);
 
+    useEffect(() => {
+        const runUpdate = () => updateContinueWatchingNavState();
+        const raf = requestAnimationFrame(runUpdate);
+        window.addEventListener('resize', runUpdate);
+        return () => {
+            cancelAnimationFrame(raf);
+            window.removeEventListener('resize', runUpdate);
+        };
+    }, [continueWatching, updateContinueWatchingNavState]);
+
     const handleResume = (entry: ContinueWatchingEntry) => {
         const { history, content, nextEpisode } = entry;
         const poster = content.poster_path || '';
@@ -414,28 +431,30 @@ export function Home() {
                             <h2 className="home-section-title">Continue Watching</h2>
                             <div className="home-section-rule" />
                         </div>
-                        <div className="content-row-header-nav">
-                            <button
-                                className={`content-row-nav-btn ${!showLeftArrow ? 'disabled' : ''}`}
-                                onClick={() => scroll('left')}
-                                disabled={!showLeftArrow}
-                                aria-label="Scroll left"
-                            >
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <path d="M15 18l-6-6 6-6" />
-                                </svg>
-                            </button>
-                            <button
-                                className={`content-row-nav-btn ${!showRightArrow ? 'disabled' : ''}`}
-                                onClick={() => scroll('right')}
-                                disabled={!showRightArrow}
-                                aria-label="Scroll right"
-                            >
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <path d="M9 18l6-6-6-6" />
-                                </svg>
-                            </button>
-                        </div>
+                        {showContinueWatchingNav && (
+                            <div className="content-row-header-nav">
+                                <button
+                                    className={`content-row-nav-btn ${!showLeftArrow ? 'disabled' : ''}`}
+                                    onClick={() => scroll('left')}
+                                    disabled={!showLeftArrow}
+                                    aria-label="Scroll left"
+                                >
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M15 18l-6-6 6-6" />
+                                    </svg>
+                                </button>
+                                <button
+                                    className={`content-row-nav-btn ${!showRightArrow ? 'disabled' : ''}`}
+                                    onClick={() => scroll('right')}
+                                    disabled={!showRightArrow}
+                                    aria-label="Scroll right"
+                                >
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M9 18l6-6-6-6" />
+                                    </svg>
+                                </button>
+                            </div>
+                        )}
                         <div
                             ref={scrollRef}
                             className="content-row-items continue-watching-row"

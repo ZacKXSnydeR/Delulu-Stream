@@ -208,3 +208,57 @@
         font-size: 1.8rem;
     }
 }
+
+@media (max-width: 560px) {
+    .search-page {
+        padding-top: 72px;
+        padding-bottom: 34px;
+    }
+
+    .search-container {
+        padding: 0 12px;
+    }
+
+    .search-header {
+        margin-bottom: 20px;
+        padding-bottom: 12px;
+    }
+
+    .search-title {
+        font-size: 1.5rem;
+        margin-bottom: 6px;
+    }
+
+    .search-count {
+        font-size: 0.9rem;
+    }
+
+    .search-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+        row-gap: 18px;
+    }
+
+    .search-card-info {
+        margin-top: 10px;
+    }
+
+    .search-card-title {
+        font-size: 0.9rem;
+    }
+
+    .search-card-meta {
+        gap: 6px;
+        font-size: 0.72rem;
+    }
+
+    .search-card-type {
+        font-size: 0.62rem;
+        padding: 2px 6px;
+    }
+
+    .search-card-play-btn {
+        width: 42px;
+        height: 42px;
+    }
+}

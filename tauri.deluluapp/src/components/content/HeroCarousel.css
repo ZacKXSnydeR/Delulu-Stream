@@ -267,6 +267,7 @@
     display: flex;
     gap: 12px;
     align-items: center;
+    flex-wrap: wrap;
 }
 
 .hero-btn-primary {
@@ -362,6 +363,10 @@
     .hero-content {
         max-width: 480px;
     }
+
+    .hero-carousel {
+        min-height: 580px;
+    }
 }
 
 @media (max-width: 768px) {
@@ -381,6 +386,18 @@
         font-size: clamp(38px, 10vw, 52px);
     }
 
+    .hero-overview {
+        margin-bottom: 20px;
+        line-height: 1.6;
+        min-height: 4.5em;
+    }
+
+    .hero-btn-primary,
+    .hero-btn-ghost {
+        padding: 10px 18px;
+        font-size: 10px;
+    }
+
     .hero-gradient {
         background: linear-gradient(
             to top,
@@ -395,6 +412,43 @@
     .hero-backdrop-enter.hero-backdrop-prev,
     .hero-backdrop-exit.hero-backdrop-prev {
         animation-duration: 900ms !important;
+    }
+}
+
+@media (max-width: 560px) {
+    .hero-carousel {
+        height: 64vh;
+        min-height: 460px;
+    }
+
+    .hero-content {
+        left: 12px;
+        right: 12px;
+        bottom: 14%;
+    }
+
+    .hero-meta {
+        gap: 8px;
+        margin-bottom: 12px;
+    }
+
+    .hero-title {
+        font-size: clamp(34px, 12vw, 46px);
+        margin-bottom: 14px;
+    }
+
+    .hero-overview {
+        font-size: 12px;
+        margin-bottom: 14px;
+    }
+
+    .hero-dot {
+        width: 5px;
+        height: 5px;
+    }
+
+    .hero-dot-active {
+        width: 18px;
     }
 }
 

@@ -9,6 +9,8 @@ import { invoke } from '@tauri-apps/api/core';
 import { getCachedMovieStream, getCachedTVStream, cacheMovieStream, cacheTVStream, type SubtitleTrack } from './streamCache';
 
 const VIDLINK_BASE = 'https://vidlink.pro';
+const VIDLINK_ORIGIN = 'https://vidlink.pro';
+const VIDSRCME_ORIGIN = 'https://vidsrcme.ru';
 
 export interface VidLinkStreamResult {
     success: boolean;
@@ -68,6 +70,49 @@ function processSubtitles(rawSubs: Array<{ url: string; language?: string }>): S
     });
 }
 
+function extractHeaderHintsFromUrl(streamUrl: string): { referer?: string; origin?: string } {
+    try {
+        const parsed = new URL(streamUrl);
+        const rawHeaders = parsed.searchParams.get('headers');
+        if (!rawHeaders) return {};
+        const decoded = JSON.parse(rawHeaders) as Record<string, string>;
+        return {
+            referer: decoded.referer ?? decoded.Referer,
+            origin: decoded.origin ?? decoded.Origin,
+        };
+    } catch {
+        return {};
+    }
+}
+
+function resolvePlaybackHeaders(
+    streamUrl: string,
+    rawHeaders: Record<string, string> | undefined,
+    vidlinkUrl: string
+): Record<string, string> {
+    const baseOrigin = new URL(vidlinkUrl).origin;
+    const hintedReferer = rawHeaders?.Referer ?? rawHeaders?.referer ?? '';
+    const hintedOrigin = rawHeaders?.Origin ?? rawHeaders?.origin ?? '';
+    const urlHints = extractHeaderHintsFromUrl(streamUrl);
+    const urlHintReferer = urlHints.referer ?? '';
+    const urlHintOrigin = urlHints.origin ?? '';
+
+    const useVidsrcHeaders =
+        hintedReferer.toLowerCase().includes('vidsrcme.ru') ||
+        hintedOrigin.toLowerCase().includes('vidsrcme.ru') ||
+        urlHintReferer.toLowerCase().includes('vidsrcme.ru') ||
+        urlHintOrigin.toLowerCase().includes('vidsrcme.ru');
+
+    const origin = useVidsrcHeaders ? VIDSRCME_ORIGIN : (baseOrigin || VIDLINK_ORIGIN);
+    const referer = `${origin}/`;
+
+    return {
+        ...rawHeaders,
+        Referer: referer,
+        Origin: origin,
+    };
+}
+
 const inFlightRequests = new Map<string, Promise<VidLinkStreamResult>>();
 
 async function callLocalExtractor(
@@ -93,18 +138,12 @@ async function callLocalExtractor(
         const subtitles = processSubtitles(data.subtitles || []);
         console.log(`[VidLink] Local extraction success, subtitles=${subtitles.length}`);
 
-        // The extracted CDN URL (e.g. storm.vodvidl.site, stormfox.live) is a
-        // sub-CDN embedded inside vidlink.pro. The CDN whitelists vidlink.pro as
-        // the allowed Referer — NOT its own domain. Always use vidlink.pro here
-        // regardless of what headers gods_EYE may have returned.
-        const vidlinkOrigin = new URL(vidlinkUrl).origin; // https://vidlink.pro
+        const resolvedHeaders = resolvePlaybackHeaders(streamUrl, data.headers, vidlinkUrl);
         return {
             success: true,
             streamUrl,
             headers: {
-                ...data.headers,
-                Referer: `${vidlinkOrigin}/`,
-                Origin: vidlinkOrigin,
+                ...resolvedHeaders,
             },
             subtitles,
             vidlinkUrl,

@@ -1,7 +1,7 @@
 .vidlink-stream-page {
     position: relative;
-    width: 100vw;
-    height: 100vh;
+    width: 100%;
+    height: 100dvh;
     background: #000;
     display: flex;
     flex-direction: column;
@@ -99,15 +99,15 @@
 
 .global-player-frame.mode-fullscreen {
     inset: 0;
-    width: 100vw;
-    height: 100vh;
+    width: 100%;
+    height: 100dvh;
     border-radius: 0;
     box-shadow: none;
 }
 
 .global-player-frame.mode-mini {
-    width: 400px;
-    height: 204px;
+    width: min(400px, calc(100vw - 24px));
+    height: min(204px, calc((100vw - 24px) * 0.51));
     right: 28px;
     bottom: 28px;
     border-radius: 20px;
@@ -247,9 +247,9 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 56px;
-    height: 100vh;
-    padding: 0 80px;
+    gap: clamp(18px, 4vw, 56px);
+    height: 100dvh;
+    padding: 0 clamp(14px, 5vw, 80px);
     animation: error-fade-in 0.6s ease-out both;
 }
 
@@ -267,7 +267,7 @@
 
 /* Small poster tile */
 .error-poster-tile {
-    width: 240px;
+    width: min(240px, 32vw);
     flex-shrink: 0;
     border-radius: 16px;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
@@ -372,8 +372,8 @@
     bottom: 32px;
     right: 32px;
     z-index: 3000;
-    width: 320px;
-    height: 190px;
+    width: min(320px, calc(100vw - 20px));
+    height: min(190px, calc((100vw - 20px) * 0.594));
 
     background-size: cover;
     background-position: center;
@@ -529,4 +529,44 @@
     background: #e01414;
     border-radius: 2px;
     transition: width 0.4s linear;
+}
+
+@media (max-width: 768px) {
+    .global-player-frame.mode-mini {
+        right: 12px;
+        bottom: 12px;
+        border-radius: 14px;
+    }
+
+    .error-center-layout {
+        flex-direction: column;
+        justify-content: center;
+        padding-top: 70px;
+        padding-bottom: 20px;
+    }
+
+    .error-poster-tile {
+        width: min(180px, 46vw);
+    }
+
+    .error-info {
+        max-width: 100%;
+        width: min(520px, calc(100vw - 28px));
+        padding: 20px 16px;
+        border-radius: 14px;
+    }
+
+    .error-title {
+        font-size: clamp(1.3rem, 5.2vw, 1.8rem);
+    }
+
+    .error-msg {
+        font-size: 0.95rem;
+        margin-bottom: 20px;
+    }
+
+    .error-btns {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
 }

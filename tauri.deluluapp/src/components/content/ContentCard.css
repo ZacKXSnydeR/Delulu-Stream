@@ -179,3 +179,47 @@
 .card-action-btn.active-favorites svg {
     fill: currentColor;
 }
+
+@media (max-width: 768px) {
+    .content-card-medium {
+        width: clamp(126px, 28vw, 184px);
+    }
+
+    .content-card-large {
+        width: clamp(136px, 30vw, 196px);
+    }
+
+    .content-card-title {
+        font-size: 0.8rem;
+    }
+
+    .card-actions {
+        opacity: 1;
+        top: 6px;
+        right: 6px;
+        gap: 4px;
+    }
+
+    .card-action-btn {
+        width: 30px;
+        height: 30px;
+    }
+}
+
+@media (max-width: 480px) {
+    .content-card-small {
+        width: clamp(98px, 40vw, 132px);
+    }
+
+    .content-card-medium {
+        width: clamp(116px, 42vw, 164px);
+    }
+
+    .content-card-large {
+        width: clamp(124px, 44vw, 174px);
+    }
+
+    .content-card:hover {
+        transform: translateY(-2px);
+    }
+}

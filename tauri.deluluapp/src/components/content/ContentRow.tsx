@@ -49,6 +49,8 @@ export function ContentRow({ title, items, icon, isLoading = false }: ContentRow
         requestAnimationFrame(step);
     };
 
+    const hasTitle = Boolean(title || icon);
+
     if (isLoading) {
         return (
             <div className="content-row">
@@ -70,11 +72,13 @@ export function ContentRow({ title, items, icon, isLoading = false }: ContentRow
     return (
         <div className="content-row">
             {/* Header with title and nav buttons */}
-            <div className="content-row-header">
-                <h2 className="content-row-title">
-                    {icon && <span className="content-row-icon">{icon}</span>}
-                    {title}
-                </h2>
+            <div className={`content-row-header ${hasTitle ? '' : 'content-row-header-nav-only'}`}>
+                {hasTitle && (
+                    <h2 className="content-row-title">
+                        {icon && <span className="content-row-icon">{icon}</span>}
+                        {title}
+                    </h2>
+                )}
 
                 {/* Navigation buttons - clean & minimal */}
                 <div className="content-row-nav">

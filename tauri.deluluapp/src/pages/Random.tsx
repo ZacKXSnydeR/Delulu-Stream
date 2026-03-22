@@ -1,9 +1,10 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Shuffle, Loader2, Play, Star, Calendar, Clock, X, Bookmark, Plus } from 'lucide-react';
+import { ArrowLeft, Shuffle, Loader2, Play, X, Bookmark, Heart } from 'lucide-react';
 import { DomeGallery } from '../components/content/DomeGallery';
 import '../components/content/DomeGallery.css';
+import { useUserListsSafe } from '../context/UserListsContext';
 import {
     getTrending,
     getPopularMovies,
@@ -173,6 +174,34 @@ export function Random() {
         navigate(`/details/${selectedMedia.type}/${selectedMedia.id}`);
     };
 
+    const userLists = useUserListsSafe();
+    const isWatchlistActive = selectedMedia && userLists
+        ? userLists.isInWatchlist(selectedMedia.id, selectedMedia.type)
+        : false;
+    const isFavoriteActive = selectedMedia && userLists
+        ? userLists.isInFavorites(selectedMedia.id, selectedMedia.type)
+        : false;
+
+    const toggleWatchlist = () => {
+        if (!selectedMedia || !details || !userLists) return;
+        userLists.toggleWatchlistItem({
+            id: selectedMedia.id,
+            type: selectedMedia.type,
+            title: title || 'Untitled',
+            posterPath: details.poster_path ?? null,
+        });
+    };
+
+    const toggleFavorites = () => {
+        if (!selectedMedia || !details || !userLists) return;
+        userLists.toggleFavoritesItem({
+            id: selectedMedia.id,
+            type: selectedMedia.type,
+            title: title || 'Untitled',
+            posterPath: details.poster_path ?? null,
+        });
+    };
+
     const galleryImages = useMemo(() =>
         images.map(img => ({ src: img.src, alt: img.alt, id: img.id, type: img.type })),
         [images]
@@ -183,7 +212,11 @@ export function Random() {
     const title = details ? (details.title || details.name) : '';
     const year = details ? new Date(details.release_date || details.first_air_date || '').getFullYear() : '';
     const runtime = isMovie && details ? details.runtime : null;
-    const rating = details ? Math.round(details.vote_average * 10) : 0;
+    const tvRuntime = !isMovie && details?.episode_run_time?.length
+        ? details.episode_run_time[0]
+        : null;
+    const durationMinutes = runtime || tvRuntime || null;
+    const rating = details ? details.vote_average.toFixed(1) : '';
     const genres = details?.genres?.slice(0, 3) || [];
     const overview = details?.overview || '';
 
@@ -271,7 +304,7 @@ export function Random() {
                                     onClick={handleCloseDetails}
                                     className="random-modal-close"
                                 >
-                                    <X size={20} />
+                                    <X size={12} />
                                 </motion.button>
 
                                 <div className="random-modal-content">
@@ -315,27 +348,22 @@ export function Random() {
                                             animate={{ opacity: 1, x: 0 }}
                                         >
                                             <span className="random-modal-type">
-                                                {isMovie ? '🎬 MOVIE' : '📺 TV SERIES'}
+                                                {isMovie ? 'MOVIE' : 'TV SERIES'}
                                             </span>
 
                                             <h2 className="random-modal-title">{title}</h2>
 
                                             <div className="random-modal-meta">
-                                                <div className="random-meta-badge random-meta-rating">
-                                                    <Star size={16} />
-                                                    <span>{rating}%</span>
-                                                </div>
+                                                <span className="random-meta-value">{rating}</span>
+                                                <span className="random-meta-dot" />
                                                 {year && (
-                                                    <div className="random-meta-badge">
-                                                        <Calendar size={16} />
-                                                        <span>{year}</span>
-                                                    </div>
+                                                    <>
+                                                        <span className="random-meta-text">{year}</span>
+                                                        <span className="random-meta-dot" />
+                                                    </>
                                                 )}
-                                                {runtime && (
-                                                    <div className="random-meta-badge">
-                                                        <Clock size={16} />
-                                                        <span>{runtime} min</span>
-                                                    </div>
+                                                {durationMinutes && (
+                                                    <span className="random-meta-text">{durationMinutes} min</span>
                                                 )}
                                             </div>
 
@@ -349,6 +377,8 @@ export function Random() {
                                                 </div>
                                             )}
 
+                                            <div className="random-modal-divider" />
+
                                             {overview && (
                                                 <p className="random-modal-overview">{overview}</p>
                                             )}
@@ -358,12 +388,18 @@ export function Random() {
                                                     <Play size={18} />
                                                     Watch Now
                                                 </button>
-                                                <button className="random-btn random-btn-secondary">
-                                                    <Bookmark size={18} />
-                                                    Watchlist
+                                                <button
+                                                    className={`random-btn random-btn-secondary ${isWatchlistActive ? 'active' : ''}`}
+                                                    onClick={toggleWatchlist}
+                                                >
+                                                    <Bookmark size={18} className="random-watchlist-icon" />
+                                                    {isWatchlistActive ? 'IN WATCHLIST' : 'WATCHLIST'}
                                                 </button>
-                                                <button className="random-btn random-btn-icon">
-                                                    <Plus size={18} />
+                                                <button
+                                                    className={`random-btn random-btn-icon ${isFavoriteActive ? 'active' : ''}`}
+                                                    onClick={toggleFavorites}
+                                                >
+                                                    <Heart size={18} className="random-favorite-icon" />
                                                 </button>
                                             </div>
                                         </motion.div>
@@ -381,3 +417,4 @@ export function Random() {
         </div>
     );
 }
+

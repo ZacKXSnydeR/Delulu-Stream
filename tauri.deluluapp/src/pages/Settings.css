@@ -7,7 +7,7 @@
     position: relative;
     min-height: 100vh;
     background: linear-gradient(to bottom, #000000 0%, #0a0a0a 50%, #000000 100%);
-    padding: 100px 40px 80px;
+    padding: clamp(72px, 10vh, 100px) clamp(16px, 4vw, 40px) clamp(44px, 8vh, 80px);
     overflow-x: hidden;
 }
 
@@ -49,7 +49,7 @@
     -webkit-backdrop-filter: blur(24px) saturate(1.2);
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 26px;
-    padding: 48px;
+    padding: clamp(20px, 3.4vw, 48px);
     box-shadow:
         0 12px 40px rgba(0, 0, 0, 0.2),
         inset 0 1px 0 rgba(255, 255, 255, 0.06);
@@ -679,5 +679,43 @@
     .profile-editor-actions {
         flex-direction: column;
         align-items: flex-start;
+    }
+}
+
+@media (max-width: 480px) {
+    .control-center {
+        padding: 24px 10px 34px;
+    }
+
+    .control-center-container {
+        border-radius: 16px;
+        padding: 16px 12px;
+    }
+
+    .control-center-title {
+        font-size: 24px;
+        line-height: 1.15;
+    }
+
+    .control-header {
+        margin-bottom: 24px;
+    }
+
+    .profile-header {
+        gap: 12px;
+    }
+
+    .profile-avatar {
+        width: 52px;
+        height: 52px;
+        font-size: 18px;
+    }
+
+    .profile-name {
+        font-size: 15px;
+    }
+
+    .system-row h3 {
+        font-size: 18px;
     }
 }

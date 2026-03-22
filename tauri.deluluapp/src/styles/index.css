@@ -104,6 +104,12 @@ body {
   overscroll-behavior-y: contain;
 }
 
+html,
+body,
+#root {
+  width: 100%;
+}
+
 /* ========================================
    SMOOTH SCROLL OPTIMIZATIONS
    ======================================== */
@@ -774,4 +780,72 @@ html {
 .close-confirm-close:hover {
   background: #ff1a27;
   box-shadow: 0 0 20px rgba(229, 9, 20, 0.35);
+}
+
+/* ============================================
+   Responsive Safety Pass
+   ============================================ */
+@media (max-width: 1024px) {
+  :root {
+    --font-size-5xl: 2.9rem;
+    --font-size-4xl: 2.2rem;
+  }
+
+  .page {
+    padding-top: 72px;
+  }
+
+  .page-content {
+    padding: clamp(14px, 2.6vw, 24px);
+  }
+}
+
+@media (max-width: 768px) {
+  html {
+    font-size: 15px;
+  }
+
+  .page {
+    padding-top: 68px;
+  }
+
+  .page-content {
+    padding: 14px;
+  }
+
+  .offline-popup {
+    left: 12px;
+    right: 12px;
+    bottom: 16px;
+    transform: none;
+  }
+
+  .offline-popup-inner {
+    width: 100%;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 12px 14px;
+  }
+
+  .offline-popup-inner span {
+    white-space: normal;
+    line-height: 1.35;
+    font-size: 12px;
+  }
+
+  .close-confirm-modal {
+    width: calc(100vw - 24px);
+    padding: 24px 18px 18px;
+    border-radius: 14px;
+  }
+
+  .close-confirm-actions {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .close-confirm-cancel,
+  .close-confirm-close {
+    width: 100%;
+  }
 }

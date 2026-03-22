@@ -528,4 +528,73 @@
         grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
         gap: 16px;
     }
+
+    .mylist-continue-grid {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+
+    .mylist-continue-card {
+        max-width: 100%;
+        border-radius: 14px;
+    }
+
+    .mylist-continue-content {
+        padding: 14px;
+        gap: 10px;
+    }
+
+    .mylist-continue-title {
+        font-size: 1rem;
+    }
+
+    .mylist-continue-play {
+        height: 34px;
+        padding: 0 12px;
+        font-size: 0.78rem;
+        border-radius: 10px;
+    }
+}
+
+@media (max-width: 1100px) {
+    .mylist-continue-grid {
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 18px;
+    }
+}
+
+@media (max-width: 560px) {
+    .mylist-page {
+        padding-top: 74px;
+    }
+
+    .mylist-header {
+        padding: 0 12px 14px;
+        gap: 14px;
+    }
+
+    .mylist-content {
+        padding: 14px 12px 28px;
+    }
+
+    .mylist-segmented-control {
+        overflow-x: auto;
+        max-width: 100%;
+        scrollbar-width: none;
+    }
+
+    .mylist-segmented-control::-webkit-scrollbar {
+        display: none;
+    }
+
+    .mylist-segment {
+        white-space: nowrap;
+        padding: 7px 12px;
+        font-size: 0.82rem;
+    }
+
+    .mylist-clear-btn {
+        padding: 8px 12px;
+        font-size: 0.78rem;
+    }
 }

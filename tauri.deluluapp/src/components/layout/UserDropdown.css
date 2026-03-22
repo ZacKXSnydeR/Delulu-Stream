@@ -2,7 +2,7 @@
     position: fixed;
     top: 70px;
     right: 24px;
-    width: 300px;
+    width: min(300px, calc(100vw - 24px));
     background: rgba(28, 28, 30, 0.55);
     backdrop-filter: blur(20px) saturate(1.2);
     -webkit-backdrop-filter: blur(20px) saturate(1.2);
@@ -148,5 +148,33 @@
 .user-dropdown-signout:hover .user-dropdown-icon {
     opacity: 1;
     color: rgba(255, 80, 80, 1);
+}
+
+@media (max-width: 640px) {
+    .user-dropdown {
+        top: 62px;
+        right: 8px;
+        width: calc(100vw - 16px);
+        border-radius: 16px;
+        padding: 6px;
+    }
+
+    .user-dropdown-header {
+        gap: 10px;
+        padding: 10px 10px 14px;
+    }
+
+    .user-dropdown-avatar {
+        width: 42px;
+        height: 42px;
+        font-size: 16px;
+    }
+
+    .user-dropdown-item {
+        height: 42px;
+        padding: 0 10px;
+        gap: 10px;
+        font-size: 13px;
+    }
 }
 

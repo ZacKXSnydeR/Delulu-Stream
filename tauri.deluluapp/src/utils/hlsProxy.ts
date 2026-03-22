@@ -9,6 +9,52 @@
 import { invoke } from '@tauri-apps/api/core';
 
 let cachedPort: number | null = null;
+const VIDLINK_ORIGIN = 'https://vidlink.pro';
+const VIDSRCME_ORIGIN = 'https://vidsrcme.ru';
+
+function extractHeaderHintsFromUrl(streamUrlHint?: string): { referer?: string; origin?: string } {
+    if (!streamUrlHint) return {};
+    try {
+        const parsed = new URL(streamUrlHint);
+        const rawHeaders = parsed.searchParams.get('headers');
+        if (!rawHeaders) return {};
+        const decoded = JSON.parse(rawHeaders) as Record<string, string>;
+        return {
+            referer: decoded.referer ?? decoded.Referer,
+            origin: decoded.origin ?? decoded.Origin,
+        };
+    } catch {
+        return {};
+    }
+}
+
+function resolveProxyOriginAndReferer(
+    headers?: Record<string, string>,
+    streamUrlHint?: string,
+): { origin: string; referer: string } {
+    const headerReferer = headers?.Referer ?? headers?.referer ?? '';
+    const headerOrigin = headers?.Origin ?? headers?.origin ?? '';
+    const urlHints = extractHeaderHintsFromUrl(streamUrlHint);
+    const hintedReferer = urlHints.referer ?? '';
+    const hintedOrigin = urlHints.origin ?? '';
+    const needsVidsrcHeaders =
+        headerReferer.toLowerCase().includes('vidsrcme.ru') ||
+        headerOrigin.toLowerCase().includes('vidsrcme.ru') ||
+        hintedReferer.toLowerCase().includes('vidsrcme.ru') ||
+        hintedOrigin.toLowerCase().includes('vidsrcme.ru');
+
+    if (needsVidsrcHeaders) {
+        return {
+            origin: VIDSRCME_ORIGIN,
+            referer: `${VIDSRCME_ORIGIN}/`,
+        };
+    }
+
+    return {
+        origin: VIDLINK_ORIGIN,
+        referer: `${VIDLINK_ORIGIN}/`,
+    };
+}
 
 export function resetProxyClientCache(): void {
     cachedPort = null;
@@ -43,12 +89,9 @@ export async function getProxyPort(): Promise<number> {
  */
 export async function setProxyHeaders(
     headers?: Record<string, string>,
-    _streamUrlHint?: string,
+    streamUrlHint?: string,
 ): Promise<void> {
-    // Hard requirement: always keep VidLink embed headers for CDN access.
-    // Do not derive from CDN hostname and do not trust provider overrides.
-    const origin = 'https://vidlink.pro';
-    const referer = 'https://vidlink.pro/';
+    const profile = resolveProxyOriginAndReferer(headers, streamUrlHint);
 
     const extraHeaders: Record<string, string> = {};
     if (headers) {
@@ -62,12 +105,12 @@ export async function setProxyHeaders(
 
     try {
         await invoke('set_proxy_headers', {
-            referer,
-            origin,
+            referer: profile.referer,
+            origin: profile.origin,
             userAgent: headers?.['User-Agent'] ?? headers?.['user-agent'] ?? 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
             extraHeaders,
         });
-        console.log(`[HLS Proxy] Headers set: referer=${referer ? `Some("${referer}")` : 'None'}, origin=${origin ? `Some("${origin}")` : 'None'}, extra=${Object.keys(extraHeaders).length}`);
+        console.log(`[HLS Proxy] Headers set: referer=${profile.referer ? `Some("${profile.referer}")` : 'None'}, origin=${profile.origin ? `Some("${profile.origin}")` : 'None'}, extra=${Object.keys(extraHeaders).length}`);
     } catch (e) {
         console.error('[HLS Proxy] Failed to set headers:', e);
         throw e;
