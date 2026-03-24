@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { searchMultiHumanized, getTrending, type TMDBContent, getTitle, getPosterUrl, getMediaType } from '../../services/tmdb';
+import { searchMulti, searchMultiHumanized, getTrending, type TMDBContent, getTitle, getPosterUrl, getBackdropUrl, getMediaType } from '../../services/tmdb';
 import Lenis from 'lenis';
 import { globalLenis } from '../../hooks/useLenis';
 import './SearchModal.css';
@@ -38,19 +38,12 @@ function saveRecentSearch(item: TMDBContent) {
             mediaType: getMediaType(item) as 'movie' | 'tv',
             posterPath: item.poster_path,
         };
-
-        // Remove if already exists
         const filtered = recent.filter(r => !(r.id === item.id && r.mediaType === newItem.mediaType));
-
-        // Add to front
         filtered.unshift(newItem);
-
-        // Keep only max
         const trimmed = filtered.slice(0, MAX_RECENT_SEARCHES);
-
         localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(trimmed));
     } catch {
-        // Ignore storage errors
+        // ignore
     }
 }
 
@@ -66,22 +59,30 @@ export function SearchModal({ isOpen, onClose }: SearchModalProps) {
     const [trendingMovies, setTrendingMovies] = useState<TMDBContent[]>([]);
     const inputRef = useRef<HTMLInputElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
-    const modalLenisRef = useRef<any>(null); // Type 'any' to avoid strict circular types with dynamic import
+    const modalLenisRef = useRef<any>(null);
     const navigate = useNavigate();
 
-    // Handle background scroll locking and Modal smooth scroll init
+    // Algolia-first via searchMultiHumanized; if anything fails, TMDB direct fallback
+    const runSmartSearch = async (term: string) => {
+        try {
+            return await searchMultiHumanized(term, 1);
+        } catch (primaryError) {
+            console.warn('[SearchModal] Primary search failed, falling back to TMDB:', primaryError);
+            return await searchMulti(term, 1);
+        }
+    };
+
+    // ── Scroll lock + Lenis init (same logic as original) ──
     useEffect(() => {
         let rafId: number | undefined;
         let wheelBlocker: ((e: WheelEvent) => void) | undefined;
 
         const initModalLenis = () => {
             if (!scrollContainerRef.current) return;
-
             const wrapper = scrollContainerRef.current;
             const content = wrapper.firstElementChild as HTMLElement;
             if (!content) return;
 
-            // Block wheel events from bubbling to window (where globalLenis listens)
             wheelBlocker = (e: WheelEvent) => e.stopPropagation();
             wrapper.addEventListener('wheel', wheelBlocker, { passive: false });
 
@@ -103,34 +104,23 @@ export function SearchModal({ isOpen, onClose }: SearchModalProps) {
         };
 
         const cleanup = () => {
-            if (rafId) {
-                cancelAnimationFrame(rafId);
-                rafId = undefined;
-            }
+            if (rafId) { cancelAnimationFrame(rafId); rafId = undefined; }
             if (wheelBlocker && scrollContainerRef.current) {
                 scrollContainerRef.current.removeEventListener('wheel', wheelBlocker);
                 wheelBlocker = undefined;
             }
-            if (modalLenisRef.current) {
-                modalLenisRef.current.destroy();
-                modalLenisRef.current = null;
-            }
+            if (modalLenisRef.current) { modalLenisRef.current.destroy(); modalLenisRef.current = null; }
         };
 
         if (isOpen) {
             if (globalLenis) globalLenis.stop();
             document.body.style.overflow = 'hidden';
-
-            // Defer slightly so React has painted the DOM
             const timeout = setTimeout(() => initModalLenis(), 50);
-
             setRecentSearches(getRecentSearches());
             inputRef.current?.focus();
-
             getTrending('movie', 'day').then(data => {
                 setTrendingMovies(data.slice(0, 5));
             }).catch(console.error);
-
             return () => {
                 clearTimeout(timeout);
                 cleanup();
@@ -144,27 +134,20 @@ export function SearchModal({ isOpen, onClose }: SearchModalProps) {
         }
     }, [isOpen]);
 
+    // ── Escape key (same) ──
     useEffect(() => {
-        const handleEscape = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') {
-                onClose();
-            }
-        };
+        const handleEscape = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
         window.addEventListener('keydown', handleEscape);
         return () => window.removeEventListener('keydown', handleEscape);
     }, [onClose]);
 
+    // ── Debounced search (same) ──
     useEffect(() => {
         const searchTimeout = setTimeout(async () => {
-            if (query.trim().length < 2) {
-                setResults([]);
-                return;
-            }
-
+            if (query.trim().length < 2) { setResults([]); return; }
             setIsLoading(true);
             try {
-                const data = await searchMultiHumanized(query, 1);
-                // Filter to only movies and TV shows
+                const data = await runSmartSearch(query);
                 const filtered = data.results.filter(
                     (item) => item.media_type === 'movie' || item.media_type === 'tv'
                 );
@@ -175,33 +158,24 @@ export function SearchModal({ isOpen, onClose }: SearchModalProps) {
                 setIsLoading(false);
             }
         }, 300);
-
         return () => clearTimeout(searchTimeout);
     }, [query]);
 
+    // ── Handlers (same) ──
     const handleSubmitSearch = async (rawQuery: string) => {
         const trimmed = rawQuery.trim();
         if (!trimmed) return;
-
-        // Save one representative result so Enter-based searches also appear in recent history.
-        // Prefer already-fetched modal results; fallback to one fresh lookup.
         let historyItem: TMDBContent | null = results[0] ?? null;
         if (!historyItem) {
             try {
-                const data = await searchMultiHumanized(trimmed, 1);
+                const data = await runSmartSearch(trimmed);
                 const filtered = data.results.filter(
                     (item) => item.media_type === 'movie' || item.media_type === 'tv'
                 );
                 historyItem = filtered[0] ?? null;
-            } catch {
-                historyItem = null;
-            }
+            } catch { historyItem = null; }
         }
-
-        if (historyItem) {
-            saveRecentSearch(historyItem);
-        }
-
+        if (historyItem) saveRecentSearch(historyItem);
         navigate(`/search?q=${encodeURIComponent(trimmed)}`);
         onClose();
         setQuery('');
@@ -210,8 +184,7 @@ export function SearchModal({ isOpen, onClose }: SearchModalProps) {
 
     const handleResultClick = (item: TMDBContent) => {
         saveRecentSearch(item);
-        const mediaType = getMediaType(item);
-        navigate(`/details/${mediaType}/${item.id}`);
+        navigate(`/details/${getMediaType(item)}/${item.id}`);
         onClose();
         setQuery('');
         setResults([]);
@@ -235,178 +208,212 @@ export function SearchModal({ isOpen, onClose }: SearchModalProps) {
         setRecentSearches([]);
     };
 
-    const handleSuggestionClick = (suggestion: string) => {
-        setQuery(suggestion);
-    };
+    const handleSuggestionClick = (suggestion: string) => setQuery(suggestion);
 
     if (!isOpen) return null;
 
     const showDefaultContent = query.trim().length < 2 && !isLoading;
     const showIdleState = showDefaultContent && recentSearches.length === 0 && trendingMovies.length === 0;
+    const getFeaturedImage = (item: TMDBContent) =>
+        getBackdropUrl(item.backdrop_path || item.poster_path, 'large');
 
     return (
-        <div className="search-modal-overlay" onClick={onClose}>
-            <div className="search-modal" onClick={(e) => e.stopPropagation()}>
-                <div className="search-input-wrapper">
-                    <svg className="search-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <circle cx="11" cy="11" r="8" />
-                        <path d="M21 21l-4.35-4.35" />
-                    </svg>
-                    <input
-                        ref={inputRef}
-                        type="text"
-                        className="search-input"
-                        placeholder="Search movies, TV shows, actors…"
-                        value={query}
-                        onChange={(e) => setQuery(e.target.value)}
-                        onKeyDown={(e) => {
-                            if (e.key === 'Enter' && query.trim()) {
-                                e.preventDefault();
-                                handleSubmitSearch(query);
-                            }
-                        }}
-                    />
-                    <button className="search-close-btn" onClick={onClose}>
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M18 6L6 18M6 6l12 12" />
+        <div className="sm-overlay" onClick={onClose}>
+            <div className="sm-modal" onClick={(e) => e.stopPropagation()}>
+
+                {/* ── Search bar ── */}
+                <div className="sm-bar">
+                    <div className="sm-bar-left">
+                        <svg className="sm-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+                            <circle cx="11" cy="11" r="7" />
+                            <path d="M16.5 16.5L21 21" />
                         </svg>
-                    </button>
+                        <input
+                            ref={inputRef}
+                            type="text"
+                            className="sm-input"
+                            placeholder="What are you in the mood for?"
+                            value={query}
+                            onChange={(e) => setQuery(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' && query.trim()) {
+                                    e.preventDefault();
+                                    handleSubmitSearch(query);
+                                }
+                            }}
+                        />
+                    </div>
+                    <div className="sm-bar-right">
+                        <button className="sm-close" onClick={onClose}>
+                            <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                                <path d="M1 1l10 10M11 1L1 11" />
+                            </svg>
+                        </button>
+                    </div>
                 </div>
 
-                <div className="search-modal-scroll-container" ref={scrollContainerRef}>
-                    <div className="search-modal-scroll-content">
+                {/* ── Scrollable body ── */}
+                <div className="sm-scroll-container" ref={scrollContainerRef}>
+                    <div className="sm-scroll-content">
+
+                        {/* Loading */}
                         {isLoading && (
-                            <div className="search-loading">
-                                <div className="search-spinner"></div>
+                            <div className="sm-loading">
+                                <div className="sm-spinner" />
                             </div>
                         )}
 
+                        {/* Results */}
                         {!isLoading && results.length > 0 && (
-                            <div className="search-results">
+                            <div className="sm-results">
                                 {results.map((item) => (
                                     <div
                                         key={`${item.id}-${getMediaType(item)}`}
-                                        className="search-result-item"
+                                        className="sm-result-item"
                                         onClick={() => handleResultClick(item)}
                                     >
                                         <img
                                             src={getPosterUrl(item.poster_path, 'small')}
                                             alt={getTitle(item)}
-                                            className="search-result-poster"
+                                            className="sm-result-poster"
                                         />
-                                        <div className="search-result-info">
-                                            <h4 className="search-result-title">{getTitle(item)}</h4>
-                                            <span className="search-result-type">
+                                        <div className="sm-result-info">
+                                            <span className="sm-result-title">{getTitle(item)}</span>
+                                            <span className="sm-result-type">
                                                 {getMediaType(item) === 'movie' ? 'Movie' : 'TV Show'}
                                             </span>
                                         </div>
+                                        <svg className="sm-result-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                                            <path d="M9 18l6-6-6-6" />
+                                        </svg>
                                     </div>
                                 ))}
                             </div>
                         )}
 
+                        {/* No results */}
                         {!isLoading && query.length >= 2 && results.length === 0 && (
-                            <div className="search-no-results">
-                                No results found for "{query}"
+                            <div className="sm-no-results">
+                                No results for <em>"{query}"</em>
                             </div>
                         )}
 
-                        {/* Recent Searches & Trending Section */}
+                        {/* Default content */}
                         {showDefaultContent && (
-                            <div className="search-default-content">
-                                {/* Recent Searches */}
-                                {recentSearches.length > 0 && (
-                                    <div className="search-section">
-                                        <div className="search-section-header">
-                                            <h3 className="search-section-title">
-                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                                    <circle cx="12" cy="12" r="10" />
-                                                    <path d="M12 6v6l4 2" />
-                                                </svg>
-                                                Recent Searches
-                                            </h3>
-                                            <button className="search-clear-btn" onClick={handleClearRecent}>
-                                                Clear
-                                            </button>
-                                        </div>
-                                        <div className="search-recent-list">
-                                            {recentSearches.map((item) => (
-                                                <div
-                                                    key={`recent-${item.id}-${item.mediaType}`}
-                                                    className="search-recent-item"
-                                                    onClick={() => handleRecentClick(item)}
-                                                >
-                                                    <img
-                                                        src={getPosterUrl(item.posterPath, 'small')}
-                                                        alt={item.title}
-                                                        className="search-recent-poster"
-                                                    />
-                                                    <div className="search-recent-info">
-                                                        <span className="search-recent-title">{item.title}</span>
-                                                        <span className="search-recent-type">
-                                                            {item.mediaType === 'movie' ? 'Movie' : 'TV Show'}
-                                                        </span>
+                            <div className="sm-default">
+
+                                {/* Two-column layout: trending left, recent right */}
+                                <div className="sm-two-col">
+
+                                    {/* Left — Trending */}
+                                    {trendingMovies.length > 0 && (
+                                        <div className="sm-col-left">
+                                            <div className="sm-section-label">Trending Now</div>
+
+                                            {/* Featured — first item tall */}
+                                            <div
+                                                className="sm-featured"
+                                                onClick={() => handleTrendingClick(trendingMovies[0])}
+                                            >
+                                                <img
+                                                    src={getFeaturedImage(trendingMovies[0])}
+                                                    alt={getTitle(trendingMovies[0])}
+                                                    className="sm-featured-img"
+                                                />
+                                                <div className="sm-featured-overlay" />
+                                                <div className="sm-featured-rank">1</div>
+                                                <div className="sm-featured-info">
+                                                    <span className="sm-featured-title">{getTitle(trendingMovies[0])}</span>
+                                                    <div className="sm-featured-meta">
+                                                        <span className="sm-featured-star">★</span>
+                                                        <span>{trendingMovies[0].vote_average.toFixed(1)}</span>
                                                     </div>
                                                 </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
+                                                <div className="sm-featured-bar" />
+                                            </div>
 
-                                {/* Trending Movies */}
-                                {trendingMovies.length > 0 && (
-                                    <div className="search-section">
-                                        <div className="search-section-header">
-                                            <h3 className="search-section-title">
-                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                                    <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
-                                                </svg>
-                                                Trending Now
-                                            </h3>
-                                        </div>
-                                        <div className="search-trending-grid">
-                                            {trendingMovies.map((item) => (
-                                                <div
-                                                    key={`trending-${item.id}`}
-                                                    className="search-trending-item"
-                                                    onClick={() => handleTrendingClick(item)}
-                                                >
-                                                    <div className="search-trending-poster-wrapper">
+                                            {/* Small grid — remaining */}
+                                            <div className="sm-small-grid">
+                                                {trendingMovies.slice(1).map((item, i) => (
+                                                    <div
+                                                        key={item.id}
+                                                        className="sm-small-card"
+                                                        onClick={() => handleTrendingClick(item)}
+                                                    >
                                                         <img
                                                             src={getPosterUrl(item.poster_path, 'small')}
                                                             alt={getTitle(item)}
-                                                            className="search-trending-poster"
+                                                            className="sm-small-img"
                                                         />
+                                                        <div className="sm-small-overlay" />
+                                                        <span className="sm-small-rank">{i + 2}</span>
+                                                        <span className="sm-small-title">{getTitle(item)}</span>
+                                                        <div className="sm-card-line" />
                                                     </div>
-                                                    <span className="search-trending-title">{getTitle(item)}</span>
-                                                </div>
-                                            ))}
+                                                ))}
+                                            </div>
                                         </div>
-                                    </div>
-                                )}
+                                    )}
 
-                                {/* Idle State - Editorial Suggestions */}
-                                {showIdleState && (
-                                    <div className="search-idle-state search-idle-shimmer">
-                                        <p className="search-idle-text">Try searching:</p>
-                                        <div className="search-idle-suggestions">
-                                            {['Interstellar', 'Breaking Bad', 'The Dark Knight', 'Stranger Things', 'Inception'].map((suggestion) => (
-                                                <span
-                                                    key={suggestion}
-                                                    className="search-idle-suggestion"
-                                                    onClick={() => handleSuggestionClick(suggestion)}
-                                                >
-                                                    {suggestion}
-                                                </span>
-                                            ))}
-                                        </div>
+                                    {/* Right — Recent + Moods */}
+                                    <div className="sm-col-right">
+
+                                        {/* Recent searches */}
+                                        {recentSearches.length > 0 && (
+                                            <div className="sm-right-section">
+                                                <div className="sm-right-header">
+                                                    <span className="sm-section-label">Recent</span>
+                                                    <button className="sm-clear-btn" onClick={handleClearRecent}>Clear</button>
+                                                </div>
+                                                <div className="sm-recent-grid">
+                                                    {recentSearches.slice(0, 8).map((item) => (
+                                                        <button
+                                                            key={`recent-${item.id}-${item.mediaType}`}
+                                                            className="sm-recent-poster-card"
+                                                            onClick={() => handleRecentClick(item)}
+                                                            type="button"
+                                                            aria-label={item.title}
+                                                            title={item.title}
+                                                        >
+                                                            <img
+                                                                src={getPosterUrl(item.posterPath, 'small')}
+                                                                alt={item.title}
+                                                                className="sm-recent-poster"
+                                                            />
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Idle state suggestions */}
+                                        {showIdleState && (
+                                            <div className="sm-right-section">
+                                                <span className="sm-section-label">Try Searching</span>
+                                                <div className="sm-suggestions">
+                                                    {['Interstellar', 'Breaking Bad', 'The Dark Knight', 'Stranger Things', 'Inception'].map((s) => (
+                                                        <span
+                                                            key={s}
+                                                            className="sm-suggestion"
+                                                            onClick={() => handleSuggestionClick(s)}
+                                                        >
+                                                            {s}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
-                                )}
+                                </div>
                             </div>
                         )}
                     </div>
                 </div>
+
+                {/* ── Footer ── */}
+                <div className="sm-footer-credit-only">Powered by TMDB</div>
             </div>
-        </div >
+        </div>
     );
 }
+
