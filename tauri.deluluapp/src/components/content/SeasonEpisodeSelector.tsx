@@ -8,6 +8,7 @@ import {
     type TMDBEpisode,
     type TMDBSeasonDetails,
 } from '../../services/tmdb';
+import { useDeferredBusy } from '../../hooks/useDeferredBusy';
 
 import './SeasonEpisodeSelector.css';
 import { SeasonDropdown } from './SeasonDropdown';
@@ -65,13 +66,15 @@ export function SeasonEpisodeSelector({
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const selectedEpisodeRef = useRef<HTMLDivElement>(null);
-    const hasScrolledRef = useRef(false);
+    const fetchIdRef = useRef(0);
 
     // Cache for fetched seasons
     const [episodeCache] = useState<Map<number, TMDBEpisode[]>>(new Map());
 
     // Fetch episodes for selected season
     const fetchEpisodes = useCallback(async (seasonNumber: number) => {
+        const currentFetchId = ++fetchIdRef.current;
+        
         // Check cache first
         if (episodeCache.has(seasonNumber)) {
             setEpisodes(episodeCache.get(seasonNumber)!);
@@ -83,16 +86,22 @@ export function SeasonEpisodeSelector({
 
         try {
             const seasonData: TMDBSeasonDetails = await getSeasonDetails(tvId, seasonNumber);
+            if (currentFetchId !== fetchIdRef.current) return;
+
             const sortedEpisodes = seasonData.episodes.sort(
                 (a, b) => a.episode_number - b.episode_number
             );
             episodeCache.set(seasonNumber, sortedEpisodes);
             setEpisodes(sortedEpisodes);
         } catch (err) {
-            setError('Failed to load episodes');
-            console.error('Error fetching episodes:', err);
+            if (currentFetchId === fetchIdRef.current) {
+                setError('Failed to load episodes');
+                console.error('Error fetching episodes:', err);
+            }
         } finally {
-            setIsLoading(false);
+            if (currentFetchId === fetchIdRef.current) {
+                setIsLoading(false);
+            }
         }
     }, [tvId, episodeCache]);
 
@@ -102,46 +111,6 @@ export function SeasonEpisodeSelector({
             fetchEpisodes(selectedSeason);
         }
     }, [selectedSeason, fetchEpisodes]);
-
-    // Lenis-style smooth scroll to element
-    const smoothScrollTo = useCallback((element: HTMLElement) => {
-        const rect = element.getBoundingClientRect();
-        const targetY = window.scrollY + rect.top - (window.innerHeight / 2) + (rect.height / 2);
-        const startY = window.scrollY;
-        const distance = targetY - startY;
-        const duration = 1200; // ms
-        let startTime: number | null = null;
-
-        // Ease-out expo for Lenis-like feel
-        const easeOutExpo = (t: number) => t === 1 ? 1 : 1 - Math.pow(2, -10 * t);
-
-        const step = (timestamp: number) => {
-            if (!startTime) startTime = timestamp;
-            const elapsed = timestamp - startTime;
-            const progress = Math.min(elapsed / duration, 1);
-            const eased = easeOutExpo(progress);
-
-            window.scrollTo(0, startY + distance * eased);
-
-            if (progress < 1) {
-                requestAnimationFrame(step);
-            }
-        };
-
-        requestAnimationFrame(step);
-    }, []);
-
-    // Auto-scroll to selected episode after episodes load
-    useEffect(() => {
-        if (!isLoading && episodes.length > 0 && selectedEpisode !== null && !hasScrolledRef.current) {
-            hasScrolledRef.current = true;
-            setTimeout(() => {
-                if (selectedEpisodeRef.current) {
-                    smoothScrollTo(selectedEpisodeRef.current);
-                }
-            }, 400);
-        }
-    }, [isLoading, episodes, selectedEpisode, smoothScrollTo]);
 
     // Handle season selection
     const handleSeasonSelect = (seasonNumber: number) => {
@@ -172,6 +141,8 @@ export function SeasonEpisodeSelector({
     };
 
 
+    const isDeferredLoading = useDeferredBusy(isLoading, 140);
+
     // Format runtime
     const formatRuntime = (minutes: number | null): string => {
         if (!minutes) return '—';
@@ -180,14 +151,6 @@ export function SeasonEpisodeSelector({
         const mins = minutes % 60;
         return mins > 0 ? `${hrs}h ${mins}m` : `${hrs}h`;
     };
-
-    // Get season display name
-    const getSeasonName = (season: TMDBSeason): string => {
-        if (season.season_number === 0) return 'Specials';
-        return season.name || `Season ${season.season_number}`;
-    };
-
-    const currentSeason = validSeasons.find((s) => s.season_number === selectedSeason);
 
     if (validSeasons.length === 0) {
         return null;
@@ -227,10 +190,17 @@ export function SeasonEpisodeSelector({
 
             {/* Episodes List */}
             <div className="episodes-list">
-                {isLoading && (
+                {isDeferredLoading && episodes.length === 0 && (
                     <div className="episodes-loading">
                         <div className="episodes-spinner" />
                         <span>Loading episodes...</span>
+                    </div>
+                )}
+
+                {isDeferredLoading && episodes.length > 0 && (
+                    <div className="episodes-switching-overlay">
+                        <div className="episodes-spinner-small" />
+                        <span>Switching season...</span>
                     </div>
                 )}
 
@@ -245,9 +215,7 @@ export function SeasonEpisodeSelector({
                     <div className="episodes-empty">No episodes available</div>
                 )}
 
-                {!isLoading &&
-                    !error &&
-                    episodes.map((episode) => {
+                {episodes.map((episode) => {
                         const isUnreleased = !!episode.air_date && new Date(`${episode.air_date}T00:00:00Z`).getTime() > Date.now();
                         const isAddonLocked = !hasAddon;
                         return (

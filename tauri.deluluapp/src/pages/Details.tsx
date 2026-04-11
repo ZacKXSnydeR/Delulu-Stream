@@ -3,7 +3,6 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { open } from '@tauri-apps/plugin-shell';
 import { SkeletonDetail } from '../components/skeleton/Skeleton';
 import { SeasonEpisodeSelector } from '../components/content/SeasonEpisodeSelector';
-import { useUserListsSafe } from '../context/UserListsContext';
 import { WatchlistButton } from '../components/content/WatchlistButton';
 import { FavoritesButton } from '../components/content/FavoritesButton';
 import {
@@ -27,6 +26,7 @@ import { useAddons } from '../context/AddonContext';
 import { TorrentButton } from '../components/content/TorrentButton';
 import { TorrentDetailsUI } from '../components/content/TorrentDetailsUI';
 import { AnimatePresence, motion } from 'framer-motion';
+import { useDeferredBusy } from '../hooks/useDeferredBusy';
 
 import './Details.css';
 
@@ -93,7 +93,6 @@ export function Details() {
     const { mediaType, id } = useParams<{ mediaType: string; id: string }>();
     const location = useLocation();
     const navigate = useNavigate();
-    const userLists = useUserListsSafe();
     const { playMedia, playerState } = usePlayer();
     const { hasAddon } = useAddons();
 
@@ -126,13 +125,18 @@ export function Details() {
     const [showBackToTop, setShowBackToTop] = useState(false);
     const [showTorrentUI, setShowTorrentUI] = useState(false);
     const pageRef = useRef<HTMLDivElement | null>(null);
+    const fetchIdRef = useRef(0);
 
     useEffect(() => {
         const fetchDetails = async () => {
             if (!id || !mediaType) return;
 
+            const currentFetchId = ++fetchIdRef.current;
+            setShowTorrentUI(false);
+            setIsLoading(true);
+
             try {
-                setIsLoading(true);
+                // Main content fetch
                 const [contentDetails, credits, movieReleaseDates] = await Promise.all([
                     mediaType === 'movie'
                         ? getMovieDetails(parseInt(id))
@@ -143,21 +147,39 @@ export function Details() {
                         : Promise.resolve(null),
                 ]);
 
+                if (currentFetchId !== fetchIdRef.current) return;
+
                 setDetails(contentDetails);
                 setCast(credits.cast.slice(0, 10));
                 setPreferredMovieReleaseMs(pickPreferredMovieReleaseMs(movieReleaseDates));
 
-                const trailerData = await getTrailer(parseInt(id), mediaType as 'movie' | 'tv');
-                setTrailer(trailerData);
-
                 if (mediaType === 'tv' && 'seasons' in contentDetails) {
                     setSeasons((contentDetails as TMDBTVShowDetails).seasons || []);
                 }
+
+                // Non-blocking trailer fetch
+                getTrailer(parseInt(id), mediaType as 'movie' | 'tv')
+                    .then(trailerData => {
+                        if (currentFetchId === fetchIdRef.current) {
+                            setTrailer(trailerData);
+                        }
+                    })
+                    .catch(() => {
+                        if (currentFetchId === fetchIdRef.current) {
+                            setTrailer(null);
+                        }
+                    });
+
             } catch (error) {
                 console.error('Error fetching details:', error);
-                setPreferredMovieReleaseMs(null);
+                if (currentFetchId === fetchIdRef.current) {
+                    setPreferredMovieReleaseMs(null);
+                    setDetails(null);
+                }
             } finally {
-                setIsLoading(false);
+                if (currentFetchId === fetchIdRef.current) {
+                    setIsLoading(false);
+                }
             }
         };
 
@@ -172,6 +194,7 @@ export function Details() {
             }
 
             const tmdbId = parseInt(id, 10);
+            const currentFetchId = fetchIdRef.current;
 
             try {
                 if (mediaType === 'movie') {
@@ -179,6 +202,8 @@ export function Details() {
                         tmdbId,
                         mediaType: 'movie',
                     });
+                    if (currentFetchId !== fetchIdRef.current) return;
+
                     if (movieProgress && movieProgress.current_time > 10) {
                         setResumeTarget({
                             initialTime: movieProgress.current_time,
@@ -191,6 +216,8 @@ export function Details() {
                 }
 
                 const continueItems = await watchService.getContinueWatching(200);
+                if (currentFetchId !== fetchIdRef.current) return;
+
                 const latestTv = continueItems.find(
                     (item) => item.media_type === 'tv' && item.tmdb_id === tmdbId
                 );
@@ -206,7 +233,9 @@ export function Details() {
 
                 setResumeTarget(null);
             } catch {
-                setResumeTarget(null);
+                if (currentFetchId === fetchIdRef.current) {
+                    setResumeTarget(null);
+                }
             }
         };
 
@@ -288,28 +317,6 @@ export function Details() {
         });
     };
 
-    const handleToggleWatchlist = () => {
-        if (!userLists || !details || !mediaType) return;
-        const title = details.title || details.name || 'Unknown';
-        userLists.toggleWatchlistItem({
-            id: parseInt(id!),
-            type: mediaType as 'movie' | 'tv',
-            title,
-            posterPath: details.poster_path,
-        });
-    };
-
-    const handleToggleFavorites = () => {
-        if (!userLists || !details || !mediaType) return;
-        const title = details.title || details.name || 'Unknown';
-        userLists.toggleFavoritesItem({
-            id: parseInt(id!),
-            type: mediaType as 'movie' | 'tv',
-            title,
-            posterPath: details.poster_path,
-        });
-    };
-
     const handleOpenTrailerInBrowser = () => {
         if (!trailer) return;
         const youtubeUrl = `https://www.youtube.com/watch?v=${trailer.key}`;
@@ -326,18 +333,17 @@ export function Details() {
         navigate('/');
     };
 
-    const isInWatchlist = userLists && mediaType ?
-        userLists.isInWatchlist(parseInt(id!), mediaType as 'movie' | 'tv') : false;
-    const isInFavorites = userLists && mediaType ?
-        userLists.isInFavorites(parseInt(id!), mediaType as 'movie' | 'tv') : false;
+    const isDeferredLoading = useDeferredBusy(isLoading, 140);
 
-    if (isLoading || !details) {
+    if (!details && isDeferredLoading) {
         return (
             <div className="details-page page">
                 <SkeletonDetail />
             </div>
         );
     }
+
+    if (!details) return null;
 
     const title = details.title || details.name || 'Unknown';
     const year = releaseDate ? new Date(releaseDate).getFullYear() : 'N/A';
