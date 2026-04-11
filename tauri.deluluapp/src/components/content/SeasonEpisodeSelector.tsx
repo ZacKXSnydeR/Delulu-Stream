@@ -8,7 +8,6 @@ import {
     type TMDBEpisode,
     type TMDBSeasonDetails,
 } from '../../services/tmdb';
-import { useDeferredBusy } from '../../hooks/useDeferredBusy';
 
 import './SeasonEpisodeSelector.css';
 import { SeasonDropdown } from './SeasonDropdown';
@@ -71,6 +70,21 @@ export function SeasonEpisodeSelector({
     // Cache for fetched seasons
     const [episodeCache] = useState<Map<number, TMDBEpisode[]>>(new Map());
 
+    const prefetchSeason = useCallback(async (seasonNumber: number) => {
+        if (!validSeasons.some((s) => s.season_number === seasonNumber)) return;
+        if (episodeCache.has(seasonNumber)) return;
+
+        try {
+            const seasonData: TMDBSeasonDetails = await getSeasonDetails(tvId, seasonNumber);
+            const sortedEpisodes = seasonData.episodes.sort(
+                (a, b) => a.episode_number - b.episode_number
+            );
+            episodeCache.set(seasonNumber, sortedEpisodes);
+        } catch {
+            // Background prefetch failure should not affect active UI.
+        }
+    }, [tvId, episodeCache, validSeasons]);
+
     // Fetch episodes for selected season
     const fetchEpisodes = useCallback(async (seasonNumber: number) => {
         const currentFetchId = ++fetchIdRef.current;
@@ -93,6 +107,9 @@ export function SeasonEpisodeSelector({
             );
             episodeCache.set(seasonNumber, sortedEpisodes);
             setEpisodes(sortedEpisodes);
+
+            void prefetchSeason(seasonNumber - 1);
+            void prefetchSeason(seasonNumber + 1);
         } catch (err) {
             if (currentFetchId === fetchIdRef.current) {
                 setError('Failed to load episodes');
@@ -103,7 +120,7 @@ export function SeasonEpisodeSelector({
                 setIsLoading(false);
             }
         }
-    }, [tvId, episodeCache]);
+    }, [tvId, episodeCache, prefetchSeason]);
 
     // Load episodes when season changes
     useEffect(() => {
@@ -115,12 +132,18 @@ export function SeasonEpisodeSelector({
     // Handle season selection
     const handleSeasonSelect = (seasonNumber: number) => {
         setSelectedSeason(seasonNumber);
-        setSelectedEpisode(null); // reset episode on season change
         try {
             sessionStorage.setItem(`delulu-season-${tvId}`, String(seasonNumber));
             sessionStorage.removeItem(`delulu-episode-${tvId}`);
         } catch { /* ignore */ }
     };
+
+    useEffect(() => {
+        if (selectedEpisode === null || episodes.length === 0) return;
+        if (!episodes.some((episode) => episode.episode_number === selectedEpisode)) {
+            setSelectedEpisode(null);
+        }
+    }, [episodes, selectedEpisode]);
 
     // Handle episode click
     const handleEpisodeClick = (episode: TMDBEpisode) => {
@@ -139,9 +162,6 @@ export function SeasonEpisodeSelector({
             onEpisodeSelect(selectedSeason, episode.episode_number, episode.name);
         }
     };
-
-
-    const isDeferredLoading = useDeferredBusy(isLoading, 140);
 
     // Format runtime
     const formatRuntime = (minutes: number | null): string => {
@@ -190,17 +210,9 @@ export function SeasonEpisodeSelector({
 
             {/* Episodes List */}
             <div className="episodes-list">
-                {isDeferredLoading && episodes.length === 0 && (
+                {isLoading && episodes.length === 0 && (
                     <div className="episodes-loading">
-                        <div className="episodes-spinner" />
-                        <span>Loading episodes...</span>
-                    </div>
-                )}
-
-                {isDeferredLoading && episodes.length > 0 && (
-                    <div className="episodes-switching-overlay">
-                        <div className="episodes-spinner-small" />
-                        <span>Switching season...</span>
+                        <span>Fetching episodes...</span>
                     </div>
                 )}
 

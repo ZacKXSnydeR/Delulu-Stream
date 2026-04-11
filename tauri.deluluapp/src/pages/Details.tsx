@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useCallback, type SyntheticEvent } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { open } from '@tauri-apps/plugin-shell';
-import { SkeletonDetail } from '../components/skeleton/Skeleton';
 import { SeasonEpisodeSelector } from '../components/content/SeasonEpisodeSelector';
 import { WatchlistButton } from '../components/content/WatchlistButton';
 import { FavoritesButton } from '../components/content/FavoritesButton';
@@ -26,7 +25,6 @@ import { useAddons } from '../context/AddonContext';
 import { TorrentButton } from '../components/content/TorrentButton';
 import { TorrentDetailsUI } from '../components/content/TorrentDetailsUI';
 import { AnimatePresence, motion } from 'framer-motion';
-import { useDeferredBusy } from '../hooks/useDeferredBusy';
 
 import './Details.css';
 
@@ -120,7 +118,6 @@ export function Details() {
     const [cast, setCast] = useState<TMDBCastMember[]>([]);
     const [trailer, setTrailer] = useState<TMDBVideo | null>(null);
     const [preferredMovieReleaseMs, setPreferredMovieReleaseMs] = useState<number | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
     const [resumeTarget, setResumeTarget] = useState<ResumeTarget | null>(null);
     const [showBackToTop, setShowBackToTop] = useState(false);
     const [showTorrentUI, setShowTorrentUI] = useState(false);
@@ -133,7 +130,6 @@ export function Details() {
 
             const currentFetchId = ++fetchIdRef.current;
             setShowTorrentUI(false);
-            setIsLoading(true);
 
             try {
                 // Main content fetch
@@ -177,9 +173,7 @@ export function Details() {
                     setDetails(null);
                 }
             } finally {
-                if (currentFetchId === fetchIdRef.current) {
-                    setIsLoading(false);
-                }
+                // No blocking loading gate here; stale content stays visible.
             }
         };
 
@@ -333,17 +327,16 @@ export function Details() {
         navigate('/');
     };
 
-    const isDeferredLoading = useDeferredBusy(isLoading, 140);
-
-    if (!details && isDeferredLoading) {
+    if (!details) {
         return (
-            <div className="details-page page">
-                <SkeletonDetail />
+            <div className="details-page page" ref={pageRef}>
+                <div className="details-backdrop-gradient" />
+                <div style={{ position: 'relative', zIndex: 2, padding: '24vh 6vw', color: 'rgba(255,255,255,0.72)', letterSpacing: '0.08em', textTransform: 'uppercase', fontSize: '0.72rem' }}>
+                    Loading details
+                </div>
             </div>
         );
     }
-
-    if (!details) return null;
 
     const title = details.title || details.name || 'Unknown';
     const year = releaseDate ? new Date(releaseDate).getFullYear() : 'N/A';
