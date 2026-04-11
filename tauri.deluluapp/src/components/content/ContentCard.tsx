@@ -6,6 +6,7 @@ import {
     getTitle,
     getReleaseYear,
     getMediaType,
+    prefetchDetailsBundle,
 } from '../../services/tmdb';
 import { getCachedImageUrl, cacheImage, isImageCached } from '../../services/imageCache';
 import { useUserListsSafe } from '../../context/UserListsContext';
@@ -31,6 +32,7 @@ export function ContentCard({ content, showTitle = false, size = 'medium' }: Con
     const [isLoaded, setIsLoaded] = useState(alreadyCached);
     const [isHovered, setIsHovered] = useState(false);
     const cacheTriggered = useRef(false);
+    const prefetchTriggered = useRef(false);
 
     const inWatchlist = userLists?.isInWatchlist(content.id, mediaType) ?? false;
     const inFavorites = userLists?.isInFavorites(content.id, mediaType) ?? false;
@@ -47,7 +49,14 @@ export function ContentCard({ content, showTitle = false, size = 'medium' }: Con
     }, [originalUrl, alreadyCached]);
 
     const handleClick = () => {
+        prefetchDetailsBundle(mediaType, content.id);
         navigate(`/details/${mediaType}/${content.id}`);
+    };
+
+    const handlePrefetch = () => {
+        if (prefetchTriggered.current) return;
+        prefetchTriggered.current = true;
+        prefetchDetailsBundle(mediaType, content.id);
     };
 
     const handleWatchlist = (e: React.MouseEvent) => {
@@ -76,8 +85,12 @@ export function ContentCard({ content, showTitle = false, size = 'medium' }: Con
         <div
             className={`content-card content-card-${size}`}
             onClick={handleClick}
-            onMouseEnter={() => setIsHovered(true)}
+            onMouseEnter={() => {
+                setIsHovered(true);
+                handlePrefetch();
+            }}
             onMouseLeave={() => setIsHovered(false)}
+            onFocus={handlePrefetch}
         >
             <div className="content-card-image-wrapper">
                 {!isLoaded && <div className="skeleton skeleton-card" />}

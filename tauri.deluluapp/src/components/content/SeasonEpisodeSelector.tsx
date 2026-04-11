@@ -8,6 +8,7 @@ import {
     type TMDBEpisode,
     type TMDBSeasonDetails,
 } from '../../services/tmdb';
+import { useDeferredBusy } from '../../hooks/useDeferredBusy';
 
 import './SeasonEpisodeSelector.css';
 import { SeasonDropdown } from './SeasonDropdown';
@@ -69,6 +70,7 @@ export function SeasonEpisodeSelector({
 
     // Cache for fetched seasons
     const [episodeCache] = useState<Map<number, TMDBEpisode[]>>(new Map());
+    const showInitialLoading = useDeferredBusy(isLoading && episodes.length === 0, 140);
 
     const prefetchSeason = useCallback(async (seasonNumber: number) => {
         if (!validSeasons.some((s) => s.season_number === seasonNumber)) return;
@@ -210,7 +212,7 @@ export function SeasonEpisodeSelector({
 
             {/* Episodes List */}
             <div className="episodes-list">
-                {isLoading && episodes.length === 0 && (
+                {showInitialLoading && (
                     <div className="episodes-loading">
                         <span>Fetching episodes...</span>
                     </div>

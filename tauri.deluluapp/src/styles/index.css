@@ -71,9 +71,9 @@
   --shadow-glow: 0 0 30px var(--color-accent-glow);
 
   /* Transitions */
-  --transition-fast: 150ms ease;
-  --transition-normal: 250ms ease;
-  --transition-slow: 400ms ease;
+  --transition-fast: 110ms ease;
+  --transition-normal: 180ms ease;
+  --transition-slow: 280ms ease;
 
   /* Z-Index */
   --z-base: 1;
