@@ -49,6 +49,11 @@ export function ContentCard({ content, showTitle = false, size = 'medium' }: Con
     }, [originalUrl, alreadyCached]);
 
     const handleClick = () => {
+        try {
+            sessionStorage.setItem(`delulu-scroll:${window.location.pathname}`, String(window.scrollY));
+        } catch {
+            // ignore storage errors
+        }
         prefetchDetailsBundle(mediaType, content.id);
         navigate(`/details/${mediaType}/${content.id}`);
     };

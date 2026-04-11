@@ -3,6 +3,7 @@
 
 const blobCache = new Map<string, string>();
 const inFlightFetches = new Map<string, Promise<string>>();
+const warmUrlCache = new Set<string>();
 
 /**
  * Get a cached blob URL for an image, or fetch + cache it.
@@ -16,7 +17,7 @@ export function getCachedImageUrl(originalUrl: string): string {
  * Returns true if this URL is already cached as a blob.
  */
 export function isImageCached(url: string): boolean {
-    return blobCache.has(url);
+    return blobCache.has(url) || warmUrlCache.has(url);
 }
 
 /**
@@ -29,6 +30,8 @@ export async function cacheImage(url: string): Promise<string> {
     const cached = blobCache.get(url);
     if (cached) return cached;
 
+    if (warmUrlCache.has(url)) return url;
+
     // Already fetching
     const inFlight = inFlightFetches.get(url);
     if (inFlight) return inFlight;
@@ -36,7 +39,29 @@ export async function cacheImage(url: string): Promise<string> {
     const promise = (async () => {
         // External images (e.g. TMDB) block cross-origin fetch.
         // Browser HTTP cache already handles image caching natively,
-        // so just return the original URL directly.
+        // so we prewarm through an Image object and mark URL as warm.
+        if (typeof Image !== 'undefined') {
+            await new Promise<void>((resolve) => {
+                const img = new Image();
+                let resolved = false;
+
+                const finish = () => {
+                    if (resolved) return;
+                    resolved = true;
+                    warmUrlCache.add(url);
+                    resolve();
+                };
+
+                img.onload = finish;
+                img.onerror = finish;
+                img.src = url;
+
+                setTimeout(finish, 1200);
+            });
+        } else {
+            warmUrlCache.add(url);
+        }
+
         inFlightFetches.delete(url);
         return url;
     })();
@@ -51,10 +76,11 @@ export async function cacheImage(url: string): Promise<string> {
 export function clearImageCache(): void {
     blobCache.forEach((blobUrl) => URL.revokeObjectURL(blobUrl));
     blobCache.clear();
+    warmUrlCache.clear();
     console.log('[ImageCache] Cleared all cached images');
 }
 
 /** Current cache size */
 export function getImageCacheSize(): number {
-    return blobCache.size;
+    return blobCache.size + warmUrlCache.size;
 }
