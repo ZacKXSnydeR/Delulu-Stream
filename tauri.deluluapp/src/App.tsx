@@ -19,6 +19,7 @@ import { MyList } from './pages/MyList';
 import { Settings } from './pages/Settings';
 import { watchService } from './services/watchHistory';
 import { getMovieStream, getTVStream } from './services/streamAdapter';
+import { discoverMovies, discoverTVShows } from './services/tmdb';
 import { bootstrapAddonManager } from './addon_manager/manager';
 
 import { useLenis } from './hooks/useLenis';
@@ -77,6 +78,12 @@ function AppContent() {
                 // Initialize Discord Rich Presence
                 invoke('presence_init', { appId: '1481365650696831162' })
                     .catch((err) => console.log('[Discord] Init error:', err));
+
+                // Warm primary browse pages for near-instant first open.
+                void Promise.allSettled([
+                    discoverMovies({ page: 1, sort_by: 'popularity.desc' }),
+                    discoverTVShows({ page: 1, sort_by: 'popularity.desc' }),
+                ]);
 
 
                 // Stream URL Warmup

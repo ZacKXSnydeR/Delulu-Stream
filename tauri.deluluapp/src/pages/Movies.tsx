@@ -5,8 +5,12 @@ import {
     getBackdropUrl,
     getMovieDetails,
     getPosterUrl,
+    prefetchDetailsBundle,
     type TMDBMovie,
 } from '../services/tmdb';
+import { cacheImage } from '../services/imageCache';
+import { globalLenis } from '../hooks/useLenis';
+import { useDeferredBusy } from '../hooks/useDeferredBusy';
 import './Movies.css';
 
 interface MovieMoodRow {
@@ -52,6 +56,42 @@ const MOVIE_MOODS: MovieMoodRow[] = [
 
 const DEFAULT_TONE = '138, 90, 72';
 const POSTERS_PER_ROW = 6;
+const MOVIES_CACHE_KEY = 'delulu_movies_cache_v1';
+const MOVIES_SCROLL_KEY = 'delulu-scroll:/movies';
+
+interface PersistedMoviesCache {
+    movies: TMDBMovie[];
+    page: number;
+    totalPages: number;
+    featuredIndex: number;
+    runtimes: Record<number, number>;
+}
+
+function readPersistedMoviesCache(): PersistedMoviesCache | null {
+    try {
+        const raw = sessionStorage.getItem(MOVIES_CACHE_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw) as Partial<PersistedMoviesCache>;
+        if (!Array.isArray(parsed.movies) || parsed.movies.length === 0) return null;
+        return {
+            movies: parsed.movies as TMDBMovie[],
+            page: typeof parsed.page === 'number' ? parsed.page : 1,
+            totalPages: typeof parsed.totalPages === 'number' ? parsed.totalPages : 1,
+            featuredIndex: typeof parsed.featuredIndex === 'number' ? parsed.featuredIndex : 0,
+            runtimes: parsed.runtimes ?? {},
+        };
+    } catch {
+        return null;
+    }
+}
+
+function persistMoviesCache(cache: PersistedMoviesCache) {
+    try {
+        sessionStorage.setItem(MOVIES_CACHE_KEY, JSON.stringify(cache));
+    } catch {
+        // ignore storage errors
+    }
+}
 
 function dedupeMovies(items: TMDBMovie[]): TMDBMovie[] {
     return Array.from(new Map(items.map((movie) => [movie.id, movie])).values());
@@ -64,6 +104,15 @@ let cachedTotalPages = 0;
 let cachedFeaturedIndex = 0;
 let cachedRuntimes: Record<number, number> = {};
 let cachedScrollY = 0;
+
+const persistedMoviesCache = readPersistedMoviesCache();
+if (persistedMoviesCache) {
+    if (cachedMovies.length === 0) cachedMovies = persistedMoviesCache.movies;
+    if (cachedPage === 0) cachedPage = persistedMoviesCache.page;
+    if (cachedTotalPages === 0) cachedTotalPages = persistedMoviesCache.totalPages;
+    if (cachedFeaturedIndex === 0) cachedFeaturedIndex = persistedMoviesCache.featuredIndex;
+    if (Object.keys(cachedRuntimes).length === 0) cachedRuntimes = persistedMoviesCache.runtimes;
+}
 
 export function Movies() {
     const navigate = useNavigate();
@@ -86,18 +135,65 @@ export function Movies() {
     const isFetchingRef = useRef(false);
     const loadMoreTriggerRef = useRef<HTMLDivElement | null>(null);
     const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const hasRestoredScrollRef = useRef(false);
 
     const hasMore = totalPages > 0 && page < totalPages;
+    const showInitialLoading = useDeferredBusy(isLoading && movies.length === 0, 160);
 
     useEffect(() => { cachedMovies = movies; }, [movies]);
     useEffect(() => { cachedPage = page; }, [page]);
     useEffect(() => { cachedTotalPages = totalPages; }, [totalPages]);
     useEffect(() => { cachedFeaturedIndex = featuredIndex; }, [featuredIndex]);
     useEffect(() => { cachedRuntimes = runtimeById; }, [runtimeById]);
+    useEffect(() => {
+        if (!movies.length) return;
+        persistMoviesCache({
+            movies,
+            page,
+            totalPages,
+            featuredIndex,
+            runtimes: runtimeById,
+        });
+    }, [movies, page, totalPages, featuredIndex, runtimeById]);
 
     useEffect(() => {
-        if (cachedScrollY > 0) requestAnimationFrame(() => window.scrollTo(0, cachedScrollY));
-        return () => { cachedScrollY = window.scrollY; };
+        const restoreScroll = () => {
+            if (hasRestoredScrollRef.current) return;
+
+            let targetY = cachedScrollY;
+            try {
+                const persisted = sessionStorage.getItem(MOVIES_SCROLL_KEY);
+                if (persisted) {
+                    const parsed = parseInt(persisted, 10);
+                    if (Number.isFinite(parsed) && parsed > 0) targetY = Math.max(targetY, parsed);
+                }
+            } catch {
+                // ignore storage errors
+            }
+
+            if (targetY <= 0) {
+                hasRestoredScrollRef.current = true;
+                return;
+            }
+
+            requestAnimationFrame(() => {
+                if (globalLenis) globalLenis.scrollTo(targetY, { immediate: true });
+                else window.scrollTo(0, targetY);
+                hasRestoredScrollRef.current = true;
+            });
+        };
+
+        restoreScroll();
+
+        return () => {
+            const y = window.scrollY;
+            cachedScrollY = y;
+            try {
+                sessionStorage.setItem(MOVIES_SCROLL_KEY, String(y));
+            } catch {
+                // ignore storage errors
+            }
+        };
     }, []);
 
     const fetchMovies = useCallback(async (pageNum: number, append: boolean) => {
@@ -106,7 +202,7 @@ export function Movies() {
         isFetchingRef.current = true;
         setLoadError('');
         if (append) setIsLoadingMore(true);
-        else setIsLoading(true);
+        else if (movies.length === 0) setIsLoading(true);
 
         try {
             const response = await discoverMovies({
@@ -125,7 +221,7 @@ export function Movies() {
             setIsLoadingMore(false);
             isFetchingRef.current = false;
         }
-    }, []);
+    }, [movies.length]);
 
     useEffect(() => {
         if (cachedMovies.length > 0) return;
@@ -194,6 +290,31 @@ export function Movies() {
         if (withoutCurated.length) return withoutCurated;
         return movies.filter((movie) => movie.poster_path);
     }, [movies, moodRows]);
+
+    useEffect(() => {
+        if (movies.length === 0) return;
+
+        const urls = Array.from(new Set([
+            ...featuredCandidates.slice(0, 6).flatMap((movie) => [
+                getBackdropUrl(movie.backdrop_path || movie.poster_path, 'large'),
+                getPosterUrl(movie.poster_path, 'medium'),
+            ]),
+            ...moodRows.flatMap((row) => row.movies.map((movie) => getPosterUrl(movie.poster_path, 'medium'))),
+            ...discoverItems.slice(0, 60).map((movie) => getPosterUrl(movie.poster_path, 'medium')),
+        ].filter(Boolean)));
+
+        urls.forEach((url) => {
+            void cacheImage(url);
+        });
+
+        const prefetchTargets = [
+            ...featuredCandidates.slice(0, 4),
+            ...discoverItems.slice(0, 16),
+        ];
+        prefetchTargets.forEach((movie) => {
+            prefetchDetailsBundle('movie', movie.id);
+        });
+    }, [movies.length, featuredCandidates, moodRows, discoverItems]);
 
     useEffect(() => {
         if (!featuredMovie) return;
@@ -343,6 +464,14 @@ export function Movies() {
     }, [featuredCandidates.length]);
 
     const openDetails = (movieId: number) => {
+        const y = window.scrollY;
+        cachedScrollY = y;
+        try {
+            sessionStorage.setItem(MOVIES_SCROLL_KEY, String(y));
+        } catch {
+            // ignore storage errors
+        }
+        prefetchDetailsBundle('movie', movieId);
         navigate(`/details/movie/${movieId}`);
     };
 
@@ -426,7 +555,7 @@ export function Movies() {
         };
     }, []);
 
-    if (isLoading) {
+    if (showInitialLoading && movies.length === 0) {
         return (
             <div className="movies-page page movies-cinema-loading">
                 <div className="movies-cinema-loading-bar" />
