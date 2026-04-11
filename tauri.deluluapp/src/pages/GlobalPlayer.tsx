@@ -6,14 +6,14 @@ import { CinematicMiniPlayer } from '../components/player/CinematicMiniPlayer';
 import { PremiumLoader } from '../components/loading/PremiumLoader';
 import { PlayerChromeBar } from '../components/player/PlayerChromeBar';
 import { usePlayer } from '../context/PlayerContext';
-import { getMovieStream, getTVStream } from '../services/vidlink';
+import { getMovieStream, getTVStream } from '../services/streamAdapter';
 import { getPosterUrl, getSeasonDetails } from '../services/tmdb';
 import { proxyStreamUrl, probeProxiedHlsManifest, PROXY_SUPERSEDED } from '../utils/hlsProxy';
 import { watchService } from '../services/watchHistory';
 import { appendAdvancedErrorLog } from '../services/advancedLogs';
 import { invalidateCachedMovieStream, invalidateCachedTVStream } from '../services/streamCache';
-import type { VidLinkStreamResult } from '../services/vidlink';
-import './VidLinkStream.css';
+import type { StreamAdapterResult } from '../services/streamAdapter';
+import './PlayerStream.css';
 
 interface NextEpisodeInfo {
     title: string;
@@ -44,7 +44,7 @@ export function GlobalPlayer() {
     const initialTime = media?.initialTime ?? 0;
     const parsedTmdbId = media?.tmdbId;
 
-    const [streamData, setStreamData] = useState<VidLinkStreamResult | null>(null);
+    const [streamData, setStreamData] = useState<StreamAdapterResult | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [isTransitioning, setIsTransitioning] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -237,7 +237,7 @@ export function GlobalPlayer() {
             for (let attempt = 0; attempt < MANIFEST_RETRY_ATTEMPTS; attempt += 1) {
                 const bypassCache = forceBypassCache || attempt > 0;
                 try {
-                    let result: VidLinkStreamResult;
+                    let result: StreamAdapterResult;
                     if (type === 'movie') {
                         result = await getMovieStream(tmdbId, bypassCache, cleanTitle);
                     } else {
@@ -548,7 +548,7 @@ export function GlobalPlayer() {
 
         for (let attempt = 0; attempt < MANIFEST_RETRY_ATTEMPTS; attempt += 1) {
             try {
-                let result: VidLinkStreamResult;
+                let result: StreamAdapterResult;
                 if (type === 'movie') {
                     result = await getMovieStream(tmdbId, true, cleanTitle);
                 } else {

@@ -3,10 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import {
     type TMDBContent,
     getBackdropUrl,
+    getPosterUrl,
     getTitle,
     getReleaseYear,
     getMediaType,
 } from '../../services/tmdb';
+import { useAddons } from '../../context/AddonContext';
 import './HeroCarousel.css';
 
 interface HeroCarouselProps {
@@ -23,6 +25,12 @@ interface HeroCarouselCacheState {
 }
 
 let cachedHeroCarouselState: HeroCarouselCacheState | null = null;
+
+function getHeroBackground(item: TMDBContent): string {
+    if (item.backdrop_path) return getBackdropUrl(item.backdrop_path, 'original');
+    if (item.poster_path) return getPosterUrl(item.poster_path, 'large');
+    return '';
+}
 
 export function HeroCarousel({ items, autoPlayInterval = 8000 }: HeroCarouselProps) {
     const itemsSignature = items.map((item) => `${getMediaType(item)}-${item.id}`).join('|');
@@ -48,6 +56,9 @@ export function HeroCarousel({ items, autoPlayInterval = 8000 }: HeroCarouselPro
 
     const navigate = useNavigate();
 
+    // Addon awareness — shows "Play Now" only when an addon is active
+    const { hasAddon } = useAddons();
+
     // Swipe gesture state
     const [dragStart, setDragStart] = useState<number | null>(null);
     const [isDragging, setIsDragging] = useState(false);
@@ -55,6 +66,8 @@ export function HeroCarousel({ items, autoPlayInterval = 8000 }: HeroCarouselPro
     const activeIndex = isTransitioning && transitionToIndex !== null ? transitionToIndex : currentIndex;
     const activeItem = items[activeIndex];
     const activeMediaType = activeItem ? getMediaType(activeItem) : null;
+    const activeRatingNumber = Number(activeItem?.vote_average);
+    const activeRatingText = Number.isFinite(activeRatingNumber) ? activeRatingNumber.toFixed(1) : 'N/A';
 
     // Typewriter text state
     const [typedTitle, setTypedTitle] = useState(hasValidCache ? cachedHeroCarouselState!.typedTitle : '');
@@ -256,7 +269,7 @@ export function HeroCarousel({ items, autoPlayInterval = 8000 }: HeroCarouselPro
                 <div
                     key={`hero-backdrop-static-${currentIndex}`}
                     className="hero-backdrop hero-backdrop-static"
-                    style={{ backgroundImage: `url(${getBackdropUrl(activeItem.backdrop_path, 'original')})` }}
+                    style={{ backgroundImage: `url(${getHeroBackground(activeItem)})` }}
                 />
             )}
 
@@ -265,12 +278,12 @@ export function HeroCarousel({ items, autoPlayInterval = 8000 }: HeroCarouselPro
                     <div
                         key={`hero-backdrop-exit-${transitionFromIndex}`}
                         className={`hero-backdrop hero-backdrop-slide hero-backdrop-exit hero-backdrop-${transitionDirection}`}
-                        style={{ backgroundImage: `url(${getBackdropUrl(items[transitionFromIndex].backdrop_path, 'original')})` }}
+                        style={{ backgroundImage: `url(${getHeroBackground(items[transitionFromIndex])})` }}
                     />
                     <div
                         key={`hero-backdrop-enter-${transitionToIndex}`}
                         className={`hero-backdrop hero-backdrop-slide hero-backdrop-enter hero-backdrop-${transitionDirection}`}
-                        style={{ backgroundImage: `url(${getBackdropUrl(items[transitionToIndex].backdrop_path, 'original')})` }}
+                        style={{ backgroundImage: `url(${getHeroBackground(items[transitionToIndex])})` }}
                     />
                 </>
             )}
@@ -292,8 +305,8 @@ export function HeroCarousel({ items, autoPlayInterval = 8000 }: HeroCarouselPro
 
                 <div className={`hero-meta hero-text-reveal ${showMeta ? 'is-visible' : ''}`}>
                     <span className="hero-rating">
-                        <span className="hero-rating-star">★</span>
-                        {activeItem.vote_average.toFixed(1)}
+                        <span className="hero-rating-star">*</span>
+                        {activeRatingText}
                     </span>
                     <span className="hero-meta-dot" />
                     <span className="hero-year">{getReleaseYear(activeItem)}</span>
@@ -306,12 +319,14 @@ export function HeroCarousel({ items, autoPlayInterval = 8000 }: HeroCarouselPro
                 <p className="hero-overview">{typedOverview}</p>
 
                 <div className="hero-buttons">
-                    <button className="hero-btn-primary" onClick={handlePlayClick}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M8 5v14l11-7z" />
-                        </svg>
-                        Play Now
-                    </button>
+                    {hasAddon && (
+                        <button className="hero-btn-primary" onClick={handlePlayClick}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M8 5v14l11-7z" />
+                            </svg>
+                            <span>Play Now</span>
+                        </button>
+                    )}
                     <button className="hero-btn-ghost" onClick={handleMoreInfoClick}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                             <circle cx="12" cy="12" r="9" />
@@ -353,3 +368,5 @@ export function HeroCarousel({ items, autoPlayInterval = 8000 }: HeroCarouselPro
         </div>
     );
 }
+
+

@@ -141,6 +141,52 @@ body,
   flex-direction: column;
 }
 
+.app-shell {
+  position: relative;
+  min-height: 100vh;
+}
+
+.app-shell--occluded {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/*
+ * Mini reveal zone for pinned bottom-right mini player.
+ * Removes routed app painting under the mini viewport so the mini frame
+ * reveals player output instead of page content.
+ */
+.app-shell--mini-occluded {
+  --mini-right: 28px;
+  --mini-bottom: 28px;
+  --mini-width: min(400px, calc(100vw - 24px));
+  --mini-height: min(204px, calc((100vw - 24px) * 0.51));
+  --mini-left: calc(100% - var(--mini-right) - var(--mini-width));
+  /* Compensate for document scroll so the hole stays anchored to viewport. */
+  --mini-scroll-y: 0px;
+  --mini-top: calc(100% - var(--mini-bottom) - var(--mini-height) + var(--mini-scroll-y));
+
+  /* WebView2: masking is more reliable than polygon(evenodd) clip-path here. */
+  -webkit-mask-image: linear-gradient(#000, #000), linear-gradient(#000, #000);
+  -webkit-mask-size: 100% 100%, var(--mini-width) var(--mini-height);
+  -webkit-mask-position: 0 0, var(--mini-left) var(--mini-top);
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-composite: xor;
+
+  mask-image: linear-gradient(#000, #000), linear-gradient(#000, #000);
+  mask-size: 100% 100%, var(--mini-width) var(--mini-height);
+  mask-position: 0 0, var(--mini-left) var(--mini-top);
+  mask-repeat: no-repeat;
+  mask-composite: exclude;
+}
+
+@media (max-width: 768px) {
+  .app-shell--mini-occluded {
+    --mini-right: 12px;
+    --mini-bottom: 12px;
+  }
+}
+
 /* Hide Scrollbars - Premium UI (scroll still works) */
 
 /* Chromium/WebKit (Electron uses Chromium) */
@@ -849,3 +895,4 @@ html {
     width: 100%;
   }
 }
+

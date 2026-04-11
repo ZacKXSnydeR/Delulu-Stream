@@ -47,12 +47,8 @@ export function CinematicMiniPlayer({
 }: CinematicMiniPlayerProps) {
     const [rendered, setRendered] = useState(visible);
     const [leaving, setLeaving] = useState(false);
-    const [position, setPosition] = useState({ right: initialRight, bottom: initialBottom });
-    const [isDragging, setIsDragging] = useState(false);
 
     const cardRef = useRef<HTMLDivElement | null>(null);
-    const dragStart = useRef({ x: 0, y: 0 });
-    const origin = useRef({ right: initialRight, bottom: initialBottom });
 
     useEffect(() => {
         if (embedded) {
@@ -75,38 +71,6 @@ export function CinematicMiniPlayer({
         return () => window.clearTimeout(timer);
     }, [visible, rendered, onExited, embedded]);
 
-    useEffect(() => {
-        if (embedded) return;
-        const onMove = (event: MouseEvent) => {
-            if (!isDragging) return;
-            const dx = event.clientX - dragStart.current.x;
-            const dy = event.clientY - dragStart.current.y;
-            const maxRight = Math.max(12, window.innerWidth - width - 12);
-            const maxBottom = Math.max(12, window.innerHeight - height - 12);
-            setPosition({
-                right: clamp(origin.current.right - dx, 12, maxRight),
-                bottom: clamp(origin.current.bottom - dy, 12, maxBottom),
-            });
-        };
-        const onUp = () => setIsDragging(false);
-        window.addEventListener('mousemove', onMove);
-        window.addEventListener('mouseup', onUp);
-        return () => {
-            window.removeEventListener('mousemove', onMove);
-            window.removeEventListener('mouseup', onUp);
-        };
-    }, [isDragging, width, height, embedded]);
-
-    const handleDragStart = (event: React.MouseEvent<HTMLDivElement>) => {
-        if (embedded) return;
-        if (event.button !== 0) return;
-        const target = event.target as HTMLElement;
-        if (target.closest('button')) return;
-        setIsDragging(true);
-        dragStart.current = { x: event.clientX, y: event.clientY };
-        origin.current = { ...position };
-    };
-
     const progressPercent = useMemo(() => `${clamp(progress, 0, 1) * 100}%`, [progress]);
 
     if (!rendered) return null;
@@ -114,9 +78,8 @@ export function CinematicMiniPlayer({
     return (
         <div
             ref={cardRef}
-            className={`cinematic-mini-player ${embedded ? 'embedded' : ''} ${leaving ? 'leave' : 'enter'} ${isDragging ? 'dragging' : ''} ${isPaused ? 'paused' : ''}`}
-            style={embedded ? undefined : { width, height, right: position.right, bottom: position.bottom }}
-            onMouseDown={handleDragStart}
+            className={`cinematic-mini-player ${embedded ? 'embedded' : ''} ${leaving ? 'leave' : 'enter'} ${isPaused ? 'paused' : ''}`}
+            style={embedded ? undefined : { width, height, right: initialRight, bottom: initialBottom }}
             onClick={onExpand}
             role="button"
             aria-label={`Resume ${title}`}

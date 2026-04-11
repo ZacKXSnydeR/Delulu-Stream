@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAddons } from '../../context/AddonContext';
 import {
     getSeasonDetails,
     getStillUrl,
@@ -8,6 +10,7 @@ import {
 } from '../../services/tmdb';
 
 import './SeasonEpisodeSelector.css';
+import { SeasonDropdown } from './SeasonDropdown';
 
 interface SeasonEpisodeSelectorProps {
     tvId: number;
@@ -28,6 +31,8 @@ export function SeasonEpisodeSelector({
     initialSeason,
     initialEpisode,
 }: SeasonEpisodeSelectorProps) {
+    const { hasAddon } = useAddons();
+    const navigate = useNavigate();
     // Filter out seasons with 0 episodes and sort by season number
     const validSeasons = seasons
         .filter((s) => s.episode_count > 0)
@@ -59,8 +64,6 @@ export function SeasonEpisodeSelector({
     const [episodes, setEpisodes] = useState<TMDBEpisode[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-    const dropdownRef = useRef<HTMLDivElement>(null);
     const selectedEpisodeRef = useRef<HTMLDivElement>(null);
     const hasScrolledRef = useRef(false);
 
@@ -140,23 +143,10 @@ export function SeasonEpisodeSelector({
         }
     }, [isLoading, episodes, selectedEpisode, smoothScrollTo]);
 
-    // Close dropdown on outside click
-    useEffect(() => {
-        if (!isDropdownOpen) return;
-        const handleClickOutside = (e: MouseEvent) => {
-            if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-                setIsDropdownOpen(false);
-            }
-        };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, [isDropdownOpen]);
-
     // Handle season selection
     const handleSeasonSelect = (seasonNumber: number) => {
         setSelectedSeason(seasonNumber);
         setSelectedEpisode(null); // reset episode on season change
-        setIsDropdownOpen(false);
         try {
             sessionStorage.setItem(`delulu-season-${tvId}`, String(seasonNumber));
             sessionStorage.removeItem(`delulu-episode-${tvId}`);
@@ -165,6 +155,9 @@ export function SeasonEpisodeSelector({
 
     // Handle episode click
     const handleEpisodeClick = (episode: TMDBEpisode) => {
+        // Guard: no add-on installed — do nothing, UI already signals this
+        if (!hasAddon) return;
+
         const isUnreleased = !!episode.air_date && new Date(`${episode.air_date}T00:00:00Z`).getTime() > Date.now();
         if (isUnreleased) return;
 
@@ -202,47 +195,35 @@ export function SeasonEpisodeSelector({
 
     return (
         <div className="season-episode-selector">
-            {/* Season Dropdown */}
-            <div className="season-dropdown-container" ref={dropdownRef}>
-                <button
-                    className="season-dropdown-trigger"
-                    onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                >
-                    <span className="season-dropdown-label">
-                        {currentSeason ? getSeasonName(currentSeason) : 'Select Season'}
-                    </span>
-                    <svg
-                        className={`season-dropdown-arrow ${isDropdownOpen ? 'open' : ''}`}
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        fill="currentColor"
-                    >
-                        <path d="M7 10l5 5 5-5z" />
-                    </svg>
-                </button>
+            <SeasonDropdown
+                seasons={validSeasons}
+                selectedSeason={selectedSeason}
+                onSeasonSelect={handleSeasonSelect}
+            />
 
-                {isDropdownOpen && (
-                    <div className="season-dropdown-menu" data-lenis-prevent>
-                        <div className="season-dropdown-scroll-content">
-                            {validSeasons.map((season, index) => (
-                                <button
-                                    key={season.id}
-                                    style={{ '--stagger-idx': index } as React.CSSProperties}
-                                    className={`season-dropdown-item ${season.season_number === selectedSeason ? 'active' : ''
-                                        }`}
-                                    onClick={() => handleSeasonSelect(season.season_number)}
-                                >
-                                    <span>{getSeasonName(season)}</span>
-                                    <span className="season-episode-count">
-                                        {season.episode_count} Episodes
-                                    </span>
-                                </button>
-                            ))}
-                        </div>
+            {/* No Add-on Banner */}
+            {!hasAddon && (
+                <div className="episodes-no-addon-banner">
+                    <div className="episodes-no-addon-icon">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                            <rect x="2" y="7" width="20" height="14" rx="2" />
+                            <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" />
+                            <line x1="12" y1="12" x2="12" y2="16" />
+                            <line x1="12" y1="11" x2="12.01" y2="11" />
+                        </svg>
                     </div>
-                )}
-            </div>
+                    <div className="episodes-no-addon-text">
+                        <strong>No streaming add-on installed</strong>
+                        <span>Episodes are visible for browsing. Install a community add-on to enable playback.</span>
+                    </div>
+                    <button
+                        className="episodes-no-addon-cta"
+                        onClick={() => navigate('/settings')}
+                    >
+                        Get Add-ons
+                    </button>
+                </div>
+            )}
 
             {/* Episodes List */}
             <div className="episodes-list">
@@ -268,14 +249,27 @@ export function SeasonEpisodeSelector({
                     !error &&
                     episodes.map((episode) => {
                         const isUnreleased = !!episode.air_date && new Date(`${episode.air_date}T00:00:00Z`).getTime() > Date.now();
+                        const isAddonLocked = !hasAddon;
                         return (
                         <div
                             key={episode.id}
                             ref={selectedEpisode === episode.episode_number ? selectedEpisodeRef : null}
-                            className={`episode-card ${selectedEpisode === episode.episode_number ? 'episode-card--selected' : ''} ${isUnreleased ? 'episode-card--locked' : ''}`}
+                            className={`episode-card ${
+                                selectedEpisode === episode.episode_number && hasAddon ? 'episode-card--selected' : ''
+                            } ${
+                                isUnreleased ? 'episode-card--locked' : ''
+                            } ${
+                                isAddonLocked ? 'episode-card--no-addon' : ''
+                            }`}
                             onClick={() => handleEpisodeClick(episode)}
-                            aria-disabled={isUnreleased}
-                            title={isUnreleased && episode.air_date ? `Releases on ${episode.air_date}` : undefined}
+                            aria-disabled={isUnreleased || isAddonLocked}
+                            title={
+                                isAddonLocked
+                                    ? 'Install an add-on from Settings to watch episodes'
+                                    : isUnreleased && episode.air_date
+                                    ? `Releases on ${episode.air_date}`
+                                    : undefined
+                            }
                         >
                             {/* Episode Thumbnail */}
                             <div className="episode-thumbnail">
@@ -284,11 +278,22 @@ export function SeasonEpisodeSelector({
                                     alt={episode.name}
                                     loading="lazy"
                                 />
-                                <div className="episode-play-overlay">
-                                    <svg width="32" height="32" viewBox="0 0 24 24" fill="white">
-                                        <path d="M8 5v14l11-7z" />
-                                    </svg>
-                                </div>
+                                {hasAddon && !isUnreleased && (
+                                    <div className="episode-play-overlay">
+                                        <svg width="32" height="32" viewBox="0 0 24 24" fill="white">
+                                            <path d="M8 5v14l11-7z" />
+                                        </svg>
+                                    </div>
+                                )}
+                                {isAddonLocked && (
+                                    <div className="episode-no-addon-badge">
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                                            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                                        </svg>
+                                        <span>No Add-on</span>
+                                    </div>
+                                )}
                             </div>
 
                             {/* Episode Info */}
@@ -325,3 +330,4 @@ export function SeasonEpisodeSelector({
         </div>
     );
 }
+

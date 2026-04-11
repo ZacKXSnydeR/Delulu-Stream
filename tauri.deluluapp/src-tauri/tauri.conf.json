@@ -36,9 +36,6 @@
     "resources": [
       "bypass/**/*"
     ],
-    "externalBin": [
-      "gods_EYE"
-    ],
     "targets": [
       "nsis"
     ],

@@ -20,16 +20,6 @@
     "sql:allow-load",
     "sql:allow-execute",
     "sql:allow-select",
-    "sql:allow-close",
-    {
-      "identifier": "shell:allow-execute",
-      "allow": [
-        {
-          "name": "gods_EYE",
-          "sidecar": true,
-          "args": true
-        }
-      ]
-    }
+    "sql:allow-close"
   ]
 }

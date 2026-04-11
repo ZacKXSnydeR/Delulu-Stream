@@ -9,8 +9,6 @@
 import { invoke } from '@tauri-apps/api/core';
 
 let cachedPort: number | null = null;
-const VIDLINK_ORIGIN = 'https://vidlink.pro';
-const VIDSRCME_ORIGIN = 'https://vidsrcme.ru';
 
 function extractHeaderHintsFromUrl(streamUrlHint?: string): { referer?: string; origin?: string } {
     if (!streamUrlHint) return {};
@@ -28,31 +26,56 @@ function extractHeaderHintsFromUrl(streamUrlHint?: string): { referer?: string; 
     }
 }
 
+function normalizeOrigin(value?: string): string | undefined {
+    if (!value) return undefined;
+    try {
+        return new URL(value).origin;
+    } catch {
+        return undefined;
+    }
+}
+
+function normalizeReferer(value?: string): string | undefined {
+    if (!value) return undefined;
+    try {
+        // Keep addon-provided referer as-is (path/query can matter for some CDNs).
+        return new URL(value).toString();
+    } catch {
+        return undefined;
+    }
+}
+
 function resolveProxyOriginAndReferer(
     headers?: Record<string, string>,
     streamUrlHint?: string,
-): { origin: string; referer: string } {
-    const headerReferer = headers?.Referer ?? headers?.referer ?? '';
-    const headerOrigin = headers?.Origin ?? headers?.origin ?? '';
+): { origin?: string; referer?: string } {
+    const headerReferer = headers?.Referer ?? headers?.referer;
+    const headerOrigin = headers?.Origin ?? headers?.origin;
     const urlHints = extractHeaderHintsFromUrl(streamUrlHint);
-    const hintedReferer = urlHints.referer ?? '';
-    const hintedOrigin = urlHints.origin ?? '';
-    const needsVidsrcHeaders =
-        headerReferer.toLowerCase().includes('vidsrcme.ru') ||
-        headerOrigin.toLowerCase().includes('vidsrcme.ru') ||
-        hintedReferer.toLowerCase().includes('vidsrcme.ru') ||
-        hintedOrigin.toLowerCase().includes('vidsrcme.ru');
 
-    if (needsVidsrcHeaders) {
-        return {
-            origin: VIDSRCME_ORIGIN,
-            referer: `${VIDSRCME_ORIGIN}/`,
-        };
+    let origin = normalizeOrigin(headerOrigin) ?? normalizeOrigin(urlHints.origin);
+    let referer = normalizeReferer(headerReferer) ?? normalizeReferer(urlHints.referer);
+
+    if (!origin && referer) {
+        origin = normalizeOrigin(referer);
+    }
+    if (!referer && origin) {
+        referer = `${origin}/`;
+    }
+
+    if ((!origin || !referer) && streamUrlHint) {
+        try {
+            const parsed = new URL(streamUrlHint);
+            origin = origin ?? parsed.origin;
+            referer = referer ?? `${parsed.origin}/`;
+        } catch {
+            // keep undefined if the URL cannot be parsed
+        }
     }
 
     return {
-        origin: VIDLINK_ORIGIN,
-        referer: `${VIDLINK_ORIGIN}/`,
+        origin,
+        referer,
     };
 }
 

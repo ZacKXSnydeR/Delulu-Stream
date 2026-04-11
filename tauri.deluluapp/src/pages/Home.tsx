@@ -23,7 +23,9 @@ import {
     type TMDBMovie,
     type TMDBTVShow,
 } from '../services/tmdb';
+import { discoveryService } from '../services/discoveryService';
 import { watchService, type WatchHistoryItem } from '../services/watchHistory';
+import { useAddons } from '../context/AddonContext';
 import './Home.css';
 
 interface ContinueWatchingEntry {
@@ -44,6 +46,18 @@ interface PersistedHomeCache {
     popularMovies: TMDBMovie[];
     popularTVShows: TMDBTVShow[];
     topRated: TMDBMovie[];
+}
+
+function hasValidVoteAverage(item: TMDBContent): boolean {
+    return Number.isFinite(Number(item.vote_average));
+}
+
+function sanitizeContentCollection<T extends TMDBContent>(items: T[]): T[] {
+    return items.filter((item) => hasValidVoteAverage(item));
+}
+
+function pickHeroItems(items: TMDBContent[]): TMDBContent[] {
+    return items.filter((item) => !!item.backdrop_path).slice(0, 5);
 }
 
 function readPersistedHomeCache(): PersistedHomeCache | null {
@@ -128,11 +142,14 @@ if (persistedCache) {
 export function Home() {
     const navigate = useNavigate();
     const { playMedia } = usePlayer();
-    const [heroItems, setHeroItems] = useState<TMDBContent[]>(cachedHero);
-    const [trending, setTrending] = useState<TMDBContent[]>(cachedTrending);
-    const [popularMovies, setPopularMovies] = useState<TMDBMovie[]>(cachedPopularMovies);
-    const [popularTVShows, setPopularTVShows] = useState<TMDBTVShow[]>(cachedPopularTVShows);
-    const [topRatedMovies, setTopRatedMovies] = useState<TMDBMovie[]>(cachedTopRated);
+    const { hasAddon } = useAddons();
+    const [heroItems, setHeroItems] = useState<TMDBContent[]>(
+        pickHeroItems(cachedHero.length > 0 ? cachedHero : cachedTrending)
+    );
+    const [trending, setTrending] = useState<TMDBContent[]>(sanitizeContentCollection(cachedTrending));
+    const [popularMovies, setPopularMovies] = useState<TMDBMovie[]>(sanitizeContentCollection(cachedPopularMovies));
+    const [popularTVShows, setPopularTVShows] = useState<TMDBTVShow[]>(sanitizeContentCollection(cachedPopularTVShows));
+    const [topRatedMovies, setTopRatedMovies] = useState<TMDBMovie[]>(sanitizeContentCollection(cachedTopRated));
     const [continueWatching, setContinueWatching] = useState<ContinueWatchingEntry[]>(cachedContinueWatching);
     const [isLoading, setIsLoading] = useState(cachedTrending.length === 0);
 
@@ -323,17 +340,20 @@ export function Home() {
         }
 
         getTrending('all', 'week').then((data) => {
-            setHeroItems(data.slice(0, 5));
-            setTrending(data);
+            const sanitizedTrending = sanitizeContentCollection(data);
+            setHeroItems(pickHeroItems(sanitizedTrending));
+            setTrending(sanitizedTrending);
             setIsLoading(false);
+            // Prefetch random media for the 3D Dome page after initial load
+            setTimeout(() => discoveryService.prefetch(), 2000);
         }).catch((err) => {
             console.error('[Home] Failed to load trending:', err);
             setIsLoading(false);
         });
 
-        getPopularMovies().then((data) => setPopularMovies(data.results)).catch(console.error);
-        getPopularTVShows().then((data) => setPopularTVShows(data.results)).catch(console.error);
-        getTopRatedMovies().then((data) => setTopRatedMovies(data.results)).catch(console.error);
+        getPopularMovies().then((data) => setPopularMovies(sanitizeContentCollection(data.results))).catch(console.error);
+        getPopularTVShows().then((data) => setPopularTVShows(sanitizeContentCollection(data.results))).catch(console.error);
+        getTopRatedMovies().then((data) => setTopRatedMovies(sanitizeContentCollection(data.results))).catch(console.error);
         fetchContinueWatching().catch(console.error);
     }, [fetchContinueWatching]);
 
@@ -361,6 +381,12 @@ export function Home() {
     }, [continueWatching, updateContinueWatchingNavState]);
 
     const handleResume = (entry: ContinueWatchingEntry) => {
+        if (!hasAddon) {
+            const mediaType = entry.history.media_type;
+            const tmdbId = entry.history.tmdb_id;
+            navigate(`/details/${mediaType}/${tmdbId}`);
+            return;
+        }
         const { history, content, nextEpisode } = entry;
         const poster = content.poster_path || '';
         const showName = 'name' in content ? content.name : 'TV Show';

@@ -326,11 +326,12 @@
 }
 
 .details-actions .btn-torrent:hover {
-    background: rgba(168, 85, 247, 0.1);
+    background: rgba(168, 85, 247, 0.08);
     border-color: #c084fc;
     color: #c084fc;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 20px rgba(168, 85, 247, 0.3);
+    transform: translateY(-1px);
+    /* Reduced glow effect */
+    box-shadow: 0 4px 12px rgba(168, 85, 247, 0.15);
 }
 
 .details-actions .btn-torrent:active {
@@ -338,7 +339,8 @@
 }
 
 .details-actions .btn-torrent svg {
-    filter: drop-shadow(0 0 4px rgba(168, 85, 247, 0.5));
+    /* Subtle glow on icon */
+    filter: drop-shadow(0 0 2px rgba(168, 85, 247, 0.3));
 }
 
 /* Icon-only button */

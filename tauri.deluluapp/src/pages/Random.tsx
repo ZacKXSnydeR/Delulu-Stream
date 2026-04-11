@@ -5,26 +5,14 @@ import { ArrowLeft, Shuffle, Loader2, Play, X, Bookmark, Heart } from 'lucide-re
 import { DomeGallery } from '../components/content/DomeGallery';
 import '../components/content/DomeGallery.css';
 import { useUserListsSafe } from '../context/UserListsContext';
+import { useAddons } from '../context/AddonContext';
+import { discoveryService, type MediaImage } from '../services/discoveryService';
 import {
-    getTrending,
-    getPopularMovies,
-    getPopularTVShows,
     getMovieDetails,
     getTVShowDetails,
-    getPosterUrl,
-    type TMDBContent,
-    type TMDBMovie,
-    type TMDBTVShow,
     type TMDBContentDetails,
 } from '../services/tmdb';
 import './Random.css';
-
-interface MediaImage {
-    src: string;
-    alt: string;
-    id: number;
-    type: 'movie' | 'tv';
-}
 
 interface SelectedMedia {
     id: number;
@@ -34,98 +22,19 @@ interface SelectedMedia {
     isLoading: boolean;
 }
 
-// Fisher-Yates shuffle
-function shuffleArray<T>(array: T[]): T[] {
-    const shuffled = [...array];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
-    return shuffled;
-}
-
-// Remove duplicates
-function removeDuplicates(images: MediaImage[]): MediaImage[] {
-    const seen = new Set<string>();
-    return images.filter(img => {
-        const key = `${img.type}-${img.id}`;
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-    });
-}
-
 export function Random() {
     const navigate = useNavigate();
-    const [images, setImages] = useState<MediaImage[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
+    const { hasAddon } = useAddons();
+    const [images, setImages] = useState<MediaImage[]>(discoveryService.getRandomMediaSync());
+    const [isLoading, setIsLoading] = useState(images.length === 0);
     const [shuffleKey, setShuffleKey] = useState(0);
     const [selectedMedia, setSelectedMedia] = useState<SelectedMedia | null>(null);
 
-    const fetchRandomMedia = async () => {
+    const loadMedia = async (forceRefresh = false) => {
         setIsLoading(true);
         try {
-            const randomPages = Array.from({ length: 5 }, () => Math.floor(Math.random() * 20) + 1);
-
-            const [
-                trendingAll,
-                ...pageResults
-            ] = await Promise.all([
-                getTrending('all', 'week'),
-                ...randomPages.map(page => getPopularMovies(page)),
-                ...randomPages.map(page => getPopularTVShows(page)),
-            ]);
-
-            const allMedia: MediaImage[] = [];
-
-            // Add trending
-            trendingAll.forEach((item: TMDBContent) => {
-                const posterPath = 'poster_path' in item ? item.poster_path : null;
-                if (posterPath) {
-                    const isMovie = 'title' in item;
-                    allMedia.push({
-                        src: getPosterUrl(posterPath, 'large'),
-                        alt: isMovie ? (item as { title: string }).title : (item as { name: string }).name,
-                        id: item.id,
-                        type: isMovie ? 'movie' : 'tv',
-                    });
-                }
-            });
-
-            // Add movies from random pages
-            pageResults.slice(0, 5).forEach((response) => {
-                response.results.forEach((item) => {
-                    const movie = item as TMDBMovie;
-                    if (movie.poster_path) {
-                        allMedia.push({
-                            src: getPosterUrl(movie.poster_path, 'large'),
-                            alt: movie.title || 'Movie',
-                            id: movie.id,
-                            type: 'movie',
-                        });
-                    }
-                });
-            });
-
-            // Add TV shows from random pages
-            pageResults.slice(5).forEach((response) => {
-                response.results.forEach((item) => {
-                    const show = item as TMDBTVShow;
-                    if (show.poster_path) {
-                        allMedia.push({
-                            src: getPosterUrl(show.poster_path, 'large'),
-                            alt: show.name || 'TV Show',
-                            id: show.id,
-                            type: 'tv',
-                        });
-                    }
-                });
-            });
-
-            const uniqueMedia = removeDuplicates(allMedia);
-            const shuffledMedia = shuffleArray(uniqueMedia);
-
-            setImages(shuffledMedia);
+            const media = await discoveryService.fetchRandomMedia(forceRefresh);
+            setImages(media);
         } catch (error) {
             console.error('Failed to fetch random media:', error);
         } finally {
@@ -134,12 +43,14 @@ export function Random() {
     };
 
     useEffect(() => {
-        fetchRandomMedia();
+        if (images.length === 0) {
+            loadMedia();
+        }
     }, []);
 
     const handleReshuffle = () => {
         setShuffleKey(prev => prev + 1);
-        setImages(prev => shuffleArray([...prev]));
+        loadMedia(true);
         setSelectedMedia(null);
     };
 
@@ -384,10 +295,12 @@ export function Random() {
                                             )}
 
                                             <div className="random-modal-actions">
-                                                <button className="random-btn random-btn-primary" onClick={handlePlay}>
-                                                    <Play size={18} />
-                                                    Watch Now
-                                                </button>
+                                                {hasAddon && (
+                                                    <button className="random-btn random-btn-primary" onClick={handlePlay}>
+                                                        <Play size={18} />
+                                                        Watch Now
+                                                    </button>
+                                                )}
                                                 <button
                                                     className={`random-btn random-btn-secondary ${isWatchlistActive ? 'active' : ''}`}
                                                     onClick={toggleWatchlist}

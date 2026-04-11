@@ -4,6 +4,8 @@ import { open } from '@tauri-apps/plugin-shell';
 import { SkeletonDetail } from '../components/skeleton/Skeleton';
 import { SeasonEpisodeSelector } from '../components/content/SeasonEpisodeSelector';
 import { useUserListsSafe } from '../context/UserListsContext';
+import { WatchlistButton } from '../components/content/WatchlistButton';
+import { FavoritesButton } from '../components/content/FavoritesButton';
 import {
     getMovieDetails,
     getMovieReleaseDates,
@@ -21,6 +23,10 @@ import {
 } from '../services/tmdb';
 import { watchService } from '../services/watchHistory';
 import { usePlayer } from '../context/PlayerContext';
+import { useAddons } from '../context/AddonContext';
+import { TorrentButton } from '../components/content/TorrentButton';
+import { TorrentDetailsUI } from '../components/content/TorrentDetailsUI';
+import { AnimatePresence, motion } from 'framer-motion';
 
 import './Details.css';
 
@@ -80,7 +86,6 @@ function pickPreferredMovieReleaseMs(
         return Math.min(...candidates);
     };
 
-    // Prefer US schedule for deterministic UX; fallback to global.
     return findEarliest('US') ?? findEarliest();
 }
 
@@ -90,6 +95,7 @@ export function Details() {
     const navigate = useNavigate();
     const userLists = useUserListsSafe();
     const { playMedia, playerState } = usePlayer();
+    const { hasAddon } = useAddons();
 
     const navState = location.state as
         | {
@@ -118,8 +124,8 @@ export function Details() {
     const [isLoading, setIsLoading] = useState(true);
     const [resumeTarget, setResumeTarget] = useState<ResumeTarget | null>(null);
     const [showBackToTop, setShowBackToTop] = useState(false);
+    const [showTorrentUI, setShowTorrentUI] = useState(false);
     const pageRef = useRef<HTMLDivElement | null>(null);
-
 
     useEffect(() => {
         const fetchDetails = async () => {
@@ -144,7 +150,6 @@ export function Details() {
                 const trailerData = await getTrailer(parseInt(id), mediaType as 'movie' | 'tv');
                 setTrailer(trailerData);
 
-                // Extract seasons for TV shows
                 if (mediaType === 'tv' && 'seasons' in contentDetails) {
                     setSeasons((contentDetails as TMDBTVShowDetails).seasons || []);
                 }
@@ -208,7 +213,6 @@ export function Details() {
         resolveResumeTarget().catch(() => setResumeTarget(null));
     }, [id, mediaType]);
 
-
     useEffect(() => {
         const handleScroll = () => setShowBackToTop(window.scrollY > 400);
         window.addEventListener('scroll', handleScroll, { passive: true });
@@ -248,7 +252,6 @@ export function Details() {
             ? 'Continue'
             : 'Play';
 
-    // Primary play action - uses VidLink streaming
     const handlePlay = async () => {
         if (!id || !mediaType || !details) return;
         if (isNotReleasedYet) return;
@@ -285,10 +288,8 @@ export function Details() {
         });
     };
 
-
     const handleToggleWatchlist = () => {
         if (!userLists || !details || !mediaType) return;
-
         const title = details.title || details.name || 'Unknown';
         userLists.toggleWatchlistItem({
             id: parseInt(id!),
@@ -300,7 +301,6 @@ export function Details() {
 
     const handleToggleFavorites = () => {
         if (!userLists || !details || !mediaType) return;
-
         const title = details.title || details.name || 'Unknown';
         userLists.toggleFavoritesItem({
             id: parseInt(id!),
@@ -309,7 +309,6 @@ export function Details() {
             posterPath: details.poster_path,
         });
     };
-
 
     const handleOpenTrailerInBrowser = () => {
         if (!trailer) return;
@@ -326,7 +325,7 @@ export function Details() {
         }
         navigate('/');
     };
-    // Check if current content is in lists
+
     const isInWatchlist = userLists && mediaType ?
         userLists.isInWatchlist(parseInt(id!), mediaType as 'movie' | 'tv') : false;
     const isInFavorites = userLists && mediaType ?
@@ -346,17 +345,28 @@ export function Details() {
 
     return (
         <div className="details-page" ref={pageRef}>
-            <button
-                className="details-back-btn"
-                onPointerDown={handleBack}
-                onClick={handleBack}
-                aria-label="Go back"
-                title="Back"
-            >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M15 18l-6-6 6-6" />
-                </svg>
-            </button>
+            {!showTorrentUI && (
+                <button
+                    className="details-back-btn"
+                    onPointerDown={handleBack}
+                    onClick={handleBack}
+                    aria-label="Go back"
+                >
+                    <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="lucide lucide-chevron-left"
+                    >
+                        <path d="M15 18l-6-6 6-6" />
+                    </svg>
+                </button>
+            )}
+
             {/* Backdrop */}
             <div
                 className="details-backdrop"
@@ -366,179 +376,189 @@ export function Details() {
             />
             <div className="details-backdrop-gradient" />
 
-            {/* Content */}
-            <div className="details-content">
-                {/* Poster */}
-                <div className="details-poster-wrapper">
-                    <img
-                        src={getPosterUrl(details.poster_path, 'large')}
-                        alt={title}
-                        className="details-poster"
-                    />
-                </div>
+            <AnimatePresence>
+                {!showTorrentUI ? (
+                    <motion.div 
+                        key="details-content"
+                        className="details-content"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.1, ease: "linear" }}
+                    >
+                        {/* Poster */}
+                        <div className="details-poster-wrapper">
+                            <img
+                                src={getPosterUrl(details.poster_path, 'large')}
+                                alt={title}
+                                className="details-poster"
+                            />
+                        </div>
 
-                {/* Info */}
-                <div className="details-info">
-                    <h1 className="details-title">{title}</h1>
+                        {/* Info */}
+                        <div className="details-info">
+                            <h1 className="details-title">{title}</h1>
 
-                    <div className="details-meta">
-                        <span className="details-rating">
-                            <span className="details-rating-star">★</span>
-                            {details.vote_average.toFixed(1)}
-                        </span>
-                        <span className="details-year">📅 {year}</span>
-                        {runtime > 0 && (
-                            <span className="details-runtime">⏱ {runtime} min</span>
-                        )}
-                        {details.number_of_seasons && (
-                            <span className="details-seasons">{details.number_of_seasons} Seasons</span>
-                        )}
-                    </div>
+                            <div className="details-meta">
+                                <span className="details-rating">
+                                    <span className="details-rating-star">★</span>
+                                    {details.vote_average.toFixed(1)}
+                                </span>
+                                <span className="details-year">📅 {year}</span>
+                                {runtime > 0 && (
+                                    <span className="details-runtime">⏱ {runtime} min</span>
+                                )}
+                                {details.number_of_seasons && (
+                                    <span className="details-seasons">{details.number_of_seasons} Seasons</span>
+                                )}
+                            </div>
 
-                    {/* Genres */}
-                    <div className="details-genres">
-                        {details.genres.map((genre) => (
-                            <span key={genre.id} className="tag">
-                                {genre.name}
-                            </span>
-                        ))}
-                    </div>
-
-                    {/* Tagline */}
-                    {details.tagline && (
-                        <p className="details-tagline">"{details.tagline}"</p>
-                    )}
-
-                    {/* Overview */}
-                    <p className="details-overview">{details.overview}</p>
-
-                    {/* Action Buttons */}
-                    <div className="details-actions">
-                        <button
-                            className="btn btn-primary btn-lg"
-                            onClick={handlePlay}
-                            disabled={isNotReleasedYet}
-                            title={isNotReleasedYet ? `Releases on ${releaseDate}` : undefined}
-                        >
-                            {primaryCtaLabel}
-                        </button>
-
-                        <button
-                            className="btn btn-ghost btn-lg"
-                            onClick={handleOpenTrailerInBrowser}
-                            disabled={!trailer}
-                            title={trailer ? 'Watch Trailer' : 'No trailer available'}
-                        >
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <polygon points="5 3 19 12 5 21 5 3" />
-                            </svg>
-                            Trailer
-                        </button>
-
-                        <button
-                            className={`btn btn-ghost btn-lg ${isInWatchlist ? 'btn-active' : ''}`}
-                            onClick={handleToggleWatchlist}
-                        >
-                            {isInWatchlist ? (
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
-                                </svg>
-                            ) : (
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                    <path d="M12 5v14M5 12h14" />
-                                </svg>
-                            )}
-                            {isInWatchlist ? 'In Watchlist' : 'Watch List'}
-                        </button>
-                        <button
-                            className={`btn btn-icon btn-ghost ${isInFavorites ? 'btn-active' : ''}`}
-                            onClick={handleToggleFavorites}
-                        >
-                            <svg
-                                width="20"
-                                height="20"
-                                viewBox="0 0 24 24"
-                                fill={isInFavorites ? '#e50914' : 'none'}
-                                stroke={isInFavorites ? '#e50914' : 'currentColor'}
-                                strokeWidth="2"
-                            >
-                                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
-                            </svg>
-                        </button>
-                    </div>
-
-                    {/* Cast */}
-                    {cast.length > 0 && (
-                        <div className="details-cast">
-                            <h2 className="details-cast-title">Cast</h2>
-                            <div className="details-cast-list">
-                                {cast.map((member) => (
-                                    <div key={member.id} className="details-cast-member">
-                                        {member.profile_path ? (
-                                            <img
-                                                src={getProfileUrl(member.profile_path, 'medium')}
-                                                alt={member.name}
-                                                className="details-cast-photo"
-                                                onError={(e) => {
-                                                    (e.target as HTMLImageElement).style.display = 'none';
-                                                    const placeholder = (e.target as HTMLImageElement).nextElementSibling;
-                                                    if (placeholder) placeholder.classList.remove('hidden');
-                                                }}
-                                            />
-                                        ) : null}
-                                        <div className={`details-cast-placeholder ${member.profile_path ? 'hidden' : ''}`}>
-                                            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                                                <circle cx="12" cy="8" r="4" />
-                                                <path d="M4 20c0-4 4-6 8-6s8 2 8 6" />
-                                            </svg>
-                                        </div>
-                                        <span className="details-cast-name">{member.name}</span>
-                                    </div>
+                            {/* Genres */}
+                            <div className="details-genres">
+                                {details.genres.map((genre) => (
+                                    <span key={genre.id} className="tag">
+                                        {genre.name}
+                                    </span>
                                 ))}
                             </div>
+
+                            {/* Tagline */}
+                            {details.tagline && (
+                                <p className="details-tagline">"{details.tagline}"</p>
+                            )}
+
+                            {/* Overview */}
+                            <p className="details-overview">{details.overview}</p>
+
+                            {/* Action Buttons */}
+                            <div className="details-actions">
+                                {hasAddon && (
+                                    <>
+                                        <button
+                                            className="btn btn-primary btn-lg"
+                                            onClick={handlePlay}
+                                            disabled={isNotReleasedYet}
+                                            title={isNotReleasedYet ? `Releases on ${releaseDate}` : undefined}
+                                        >
+                                            {primaryCtaLabel}
+                                        </button>
+                                        <TorrentButton
+                                            onClick={() => setShowTorrentUI(true)}
+                                            disabled={isNotReleasedYet}
+                                            title={isNotReleasedYet ? `Releases on ${releaseDate}` : undefined}
+                                        />
+                                    </>
+                                )}
+
+                                <button
+                                    className="btn btn-ghost btn-lg"
+                                    onClick={handleOpenTrailerInBrowser}
+                                    disabled={!trailer}
+                                    title={trailer ? 'Watch Trailer' : 'No trailer available'}
+                                >
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <polygon points="5 3 19 12 5 21 5 3" />
+                                    </svg>
+                                    Trailer
+                                </button>
+
+                                <WatchlistButton 
+                                    id={parseInt(id!)} 
+                                    mediaType={mediaType as 'movie' | 'tv'} 
+                                    title={details.title || details.name || 'Unknown'} 
+                                    posterPath={details.poster_path} 
+                                />
+                                <FavoritesButton 
+                                    id={parseInt(id!)} 
+                                    mediaType={mediaType as 'movie' | 'tv'} 
+                                    title={details.title || details.name || 'Unknown'} 
+                                    posterPath={details.poster_path} 
+                                />
+                            </div>
+
+                            {/* Cast */}
+                            {cast.length > 0 && (
+                                <div className="details-cast">
+                                    <h2 className="details-cast-title">Cast</h2>
+                                    <div className="details-cast-list">
+                                        {cast.map((member) => (
+                                            <div key={member.id} className="details-cast-member">
+                                                {member.profile_path ? (
+                                                    <img
+                                                        src={getProfileUrl(member.profile_path, 'medium')}
+                                                        alt={member.name}
+                                                        className="details-cast-photo"
+                                                        onError={(e) => {
+                                                            (e.target as HTMLImageElement).style.display = 'none';
+                                                            const placeholder = (e.target as HTMLImageElement).nextElementSibling;
+                                                            if (placeholder) placeholder.classList.remove('hidden');
+                                                        }}
+                                                    />
+                                                ) : null}
+                                                <div className={`details-cast-placeholder ${member.profile_path ? 'hidden' : ''}`}>
+                                                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                                                        <circle cx="12" cy="8" r="4" />
+                                                        <path d="M4 20c0-4 4-6 8-6s8 2 8 6" />
+                                                    </svg>
+                                                </div>
+                                                <span className="details-cast-name">{member.name}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Seasons & Episodes for TV Shows */}
+                            {mediaType === 'tv' && seasons.length > 0 && id && (
+                                <SeasonEpisodeSelector
+                                    tvId={parseInt(id)}
+                                    seasons={seasons}
+                                    showName={(details as any)?.name || 'TV Show'}
+                                    posterPath={details?.poster_path || undefined}
+                                    initialSeason={initialSeasonFromState}
+                                    initialEpisode={initialEpisodeFromState}
+                                    onEpisodeSelect={async (seasonNum, episodeNum, episodeName) => {
+                                        if (isNotReleasedYet) return;
+                                        const showName = (details as TMDBTVShowDetails)?.name || 'TV Show';
+                                        const episodeTitle = episodeName
+                                            ? `${showName} - S${seasonNum}E${episodeNum}: ${episodeName}`
+                                            : `${showName} - S${seasonNum}E${episodeNum}`;
+                                        const posterPath = details?.poster_path || '';
+                                        const genre = details.genres?.slice(0, 3).map((g) => g.name).join(', ') || '';
+                                        const tmdbId = parseInt(id, 10);
+
+                                        let resumeTime = 0;
+                                        try {
+                                            const existingProgress = await watchService.getProgress({
+                                                tmdbId,
+                                                mediaType: 'tv',
+                                                seasonNumber: seasonNum,
+                                                episodeNumber: episodeNum,
+                                            });
+                                            resumeTime = existingProgress?.current_time || 0;
+                                        } catch {
+                                            resumeTime = 0;
+                                        }
+
+                                        playMedia({ mediaType: 'tv', tmdbId, season: seasonNum, episode: episodeNum, title: episodeTitle, posterPath, genre, initialTime: resumeTime });
+                                    }}
+                                />
+                            )}
                         </div>
-                    )}
+                    </motion.div>
+                ) : (
+                    <TorrentDetailsUI
+                        key="torrent-ui"
+                        details={details}
+                        mediaType={mediaType!}
+                        seasons={seasons}
+                        onClose={() => setShowTorrentUI(false)}
+                    />
+                )}
+            </AnimatePresence>
 
-                    {/* Seasons & Episodes for TV Shows */}
-                    {mediaType === 'tv' && seasons.length > 0 && id && (
-                        <SeasonEpisodeSelector
-                            tvId={parseInt(id)}
-                            seasons={seasons}
-                            showName={(details as any)?.name || 'TV Show'}
-                            posterPath={details?.poster_path || undefined}
-                            initialSeason={initialSeasonFromState}
-                            initialEpisode={initialEpisodeFromState}
-                            onEpisodeSelect={async (seasonNum, episodeNum, episodeName) => {
-                                if (isNotReleasedYet) return;
-                                const showName = (details as TMDBTVShowDetails)?.name || 'TV Show';
-                                const episodeTitle = episodeName
-                                    ? `${showName} - S${seasonNum}E${episodeNum}: ${episodeName}`
-                                    : `${showName} - S${seasonNum}E${episodeNum}`;
-                                const posterPath = details?.poster_path || '';
-                                const genre = details.genres?.slice(0, 3).map((g) => g.name).join(', ') || '';
-                                const tmdbId = parseInt(id, 10);
-
-                                let resumeTime = 0;
-                                try {
-                                    const existingProgress = await watchService.getProgress({
-                                        tmdbId,
-                                        mediaType: 'tv',
-                                        seasonNumber: seasonNum,
-                                        episodeNumber: episodeNum,
-                                    });
-                                    resumeTime = existingProgress?.current_time || 0;
-                                } catch {
-                                    resumeTime = 0;
-                                }
-
-                                playMedia({ mediaType: 'tv', tmdbId, season: seasonNum, episode: episodeNum, title: episodeTitle, posterPath, genre, initialTime: resumeTime });
-                            }}
-                        />
-                    )}
-                </div>
-            </div>
             {/* Back to Top - TV shows only */}
-            {mediaType === "tv" && showBackToTop && (
+            {mediaType === "tv" && showBackToTop && !showTorrentUI && (
                 <button
                     className="back-to-top-btn"
                     onClick={scrollToTop}
@@ -553,6 +573,3 @@ export function Details() {
         </div>
     );
 }
-
-
-

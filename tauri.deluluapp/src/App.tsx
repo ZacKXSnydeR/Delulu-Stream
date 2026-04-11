@@ -4,6 +4,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { PlayerProvider } from './context/PlayerContext';
 import { UserListsProvider } from './context/UserListsContext';
 import { UserProfileProvider } from './context/UserProfileContext';
+import { AddonProvider } from './context/AddonContext';
 import { Navbar } from './components/layout/Navbar';
 import { SearchModal } from './components/layout/SearchModal';
 import { UserDropdown } from './components/layout/UserDropdown';
@@ -17,7 +18,8 @@ import { Random } from './pages/Random';
 import { MyList } from './pages/MyList';
 import { Settings } from './pages/Settings';
 import { watchService } from './services/watchHistory';
-import { getMovieStream, getTVStream } from './services/vidlink';
+import { getMovieStream, getTVStream } from './services/streamAdapter';
+import { bootstrapAddonManager } from './addon_manager/manager';
 
 import { useLenis } from './hooks/useLenis';
 import { initDatabase } from './services/database';
@@ -64,13 +66,13 @@ function AppContent() {
     // Initialize Lenis smooth scrolling
     useLenis();
 
-    // Initialize database, prepare extractor engine, and warm continue-watching streams
+    // Initialize database, bootstrap addons, and warm continue-watching streams
     useEffect(() => {
         let cancelled = false;
         const prepare = async () => {
             try {
                 await initDatabase();
-                await invoke('prepare_extractor_engine');
+                await bootstrapAddonManager();
                 
                 // Initialize Discord Rich Presence
                 invoke('presence_init', { appId: '1481365650696831162' })
@@ -96,7 +98,7 @@ function AppContent() {
                                         item.episode_number ?? 1
                                     );
                                 }
-                                console.log(`[Warmup] Pre-extracted: ${item.tmdb_id} (${item.media_type})`);
+                                console.log(`[Warmup] Pre-resolved: ${item.tmdb_id} (${item.media_type})`);
                             } catch (e) {
                                 console.warn(`[Warmup] Failed for ${item.tmdb_id}:`, e);
                             }
@@ -179,9 +181,11 @@ function App() {
         <BrowserRouter>
             <UserProfileProvider>
                 <UserListsProvider>
-                    <PlayerProvider>
-                        <AppContent />
-                    </PlayerProvider>
+                    <AddonProvider>
+                        <PlayerProvider>
+                            <AppContent />
+                        </PlayerProvider>
+                    </AddonProvider>
                 </UserListsProvider>
             </UserProfileProvider>
         </BrowserRouter>
@@ -189,3 +193,4 @@ function App() {
 }
 
 export default App;
+

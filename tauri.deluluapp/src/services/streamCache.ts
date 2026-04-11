@@ -1,11 +1,11 @@
 /**
  * Stream Cache Service
  * 
- * Caches extracted VidLink stream URLs locally using SQLite via Tauri Plugin.
+ * Caches extracted Stream Adapter stream URLs locally using SQLite via Tauri Plugin.
  * - Stored natively in the app data directory
  * - Key format: movie-{tmdbId} or tv-{tmdbId}-S{season}E{episode}
  * - Cache is long-lived but verified upon request
- * - Bypasses extractors on HIT
+ * - Bypasses addon stream resolution on HIT
  */
 
 import Database from '@tauri-apps/plugin-sql';
@@ -24,10 +24,10 @@ export interface CachedStream {
         Origin?: string;
         'User-Agent'?: string;
     };
-    subtitles?: SubtitleTrack[]; // Subtitle tracks from extractor
+    subtitles?: SubtitleTrack[]; // Subtitle tracks returned by addon streams
     cachedAt: number; // timestamp
     quality?: string;
-    provider?: 'godseye';
+    provider?: 'addon';
     queryTitle?: string;
 }
 
@@ -51,7 +51,7 @@ export function getTVCacheKey(tmdbId: number, season: number, episode: number): 
     return `tv-${tmdbId}-S${season}E${episode}`;
 }
 
-const CACHE_MAX_AGE_HOURS_DEFAULT = 24; // gods_EYE / default
+const CACHE_MAX_AGE_HOURS_DEFAULT = 24; // default stream cache TTL
 let dbInstance: Database | null = null;
 
 /**
@@ -96,10 +96,8 @@ async function getDb(): Promise<Database> {
 /**
  * Check if cached entry is still valid
  */
-function inferProviderFromHeaders(headers?: CachedStream['headers']): 'godseye' | undefined {
-    const referer = headers?.Referer?.toLowerCase() || '';
-    if (!referer) return undefined;
-    return referer.includes('vidlink.pro') ? 'godseye' : undefined;
+function inferProviderFromHeaders(headers?: CachedStream['headers']): 'addon' | undefined {
+    return headers?.Referer || headers?.Origin ? 'addon' : undefined;
 }
 
 function isEntryValid(cachedAt: number): boolean {
@@ -117,7 +115,7 @@ async function getCachedStreamByKey(key: string): Promise<CachedStream | null> {
             const row = result[0];
             const parsedHeaders = row.headers ? JSON.parse(row.headers) : undefined;
             const declaredProvider =
-                row.provider === 'godseye'
+                row.provider === 'addon'
                     ? row.provider
                     : undefined;
             const provider = declaredProvider || inferProviderFromHeaders(parsedHeaders);
@@ -184,7 +182,7 @@ export async function cacheMovieStream(
     streamUrl: string,
     headers?: CachedStream['headers'],
     subtitles?: SubtitleTrack[],
-    provider?: 'godseye',
+    provider?: 'addon',
     queryTitle?: string
 ): Promise<void> {
     const key = getMovieCacheKey(tmdbId);
@@ -202,7 +200,7 @@ export async function cacheTVStream(
     streamUrl: string,
     headers?: CachedStream['headers'],
     subtitles?: SubtitleTrack[],
-    provider?: 'godseye',
+    provider?: 'addon',
     queryTitle?: string
 ): Promise<void> {
     const key = getTVCacheKey(tmdbId, season, episode);
@@ -215,7 +213,7 @@ async function saveCachedStream(
     streamUrl: string,
     headers?: CachedStream['headers'],
     subtitles?: SubtitleTrack[],
-    provider?: 'godseye',
+    provider?: 'addon',
     queryTitle?: string
 ): Promise<void> {
     try {
@@ -314,3 +312,4 @@ export async function cleanupExpiredEntries(): Promise<number> {
         return 0;
     }
 }
+

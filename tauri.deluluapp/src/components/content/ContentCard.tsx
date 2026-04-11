@@ -9,6 +9,7 @@ import {
 } from '../../services/tmdb';
 import { getCachedImageUrl, cacheImage, isImageCached } from '../../services/imageCache';
 import { useUserListsSafe } from '../../context/UserListsContext';
+import { useAddons } from '../../context/AddonContext';
 import './ContentCard.css';
 
 interface ContentCardProps {
@@ -20,6 +21,7 @@ interface ContentCardProps {
 export function ContentCard({ content, showTitle = false, size = 'medium' }: ContentCardProps) {
     const navigate = useNavigate();
     const userLists = useUserListsSafe();
+    const { hasAddon } = useAddons();
     const posterSize = size === 'small' ? 'small' : size === 'large' ? 'large' : 'medium';
     const originalUrl = getPosterUrl(content.poster_path, posterSize);
     const alreadyCached = isImageCached(originalUrl);
@@ -32,6 +34,8 @@ export function ContentCard({ content, showTitle = false, size = 'medium' }: Con
 
     const inWatchlist = userLists?.isInWatchlist(content.id, mediaType) ?? false;
     const inFavorites = userLists?.isInFavorites(content.id, mediaType) ?? false;
+    const ratingNumber = Number(content.vote_average);
+    const ratingText = Number.isFinite(ratingNumber) ? ratingNumber.toFixed(1) : 'N/A';
 
     // When the native <img> loads, cache the blob for next time
     useEffect(() => {
@@ -106,14 +110,16 @@ export function ContentCard({ content, showTitle = false, size = 'medium' }: Con
                     </button>
                 </div>
                 <div className={`content-card-overlay ${isHovered ? 'visible' : ''}`}>
-                    <div className="content-card-play">
-                        <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M8 5v14l11-7z" />
-                        </svg>
-                    </div>
+                    {hasAddon && (
+                        <div className="content-card-play">
+                            <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M8 5v14l11-7z" />
+                            </svg>
+                        </div>
+                    )}
                     <div className="content-card-info">
                         <span className="content-card-rating">
-                            ★ {content.vote_average.toFixed(1)}
+                            * {ratingText}
                         </span>
                         <span className="content-card-year">{getReleaseYear(content)}</span>
                     </div>
@@ -125,4 +131,3 @@ export function ContentCard({ content, showTitle = false, size = 'medium' }: Con
         </div>
     );
 }
-

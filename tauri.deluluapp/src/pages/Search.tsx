@@ -10,12 +10,14 @@ import {
     type TMDBContent,
 } from '../services/tmdb';
 import './Search.css';
+import { useAddons } from '../context/AddonContext';
 
 type SearchResultItem = TMDBContent & { media_type: 'movie' | 'tv' };
 
 export function Search() {
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
+    const { hasAddon } = useAddons();
     const query = searchParams.get('q') || '';
     
     const [results, setResults] = useState<SearchResultItem[]>([]);
@@ -140,11 +142,13 @@ export function Search() {
                                             loading="lazy"
                                         />
                                         <div className="search-card-overlay">
-                                            <div className="search-card-play-btn">
-                                                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                                                    <path d="M8 5v14l11-7z" />
-                                                </svg>
-                                            </div>
+                                            {hasAddon && (
+                                                <div className="search-card-play-btn">
+                                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                                                        <path d="M8 5v14l11-7z" />
+                                                    </svg>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                     <div className="search-card-info">
