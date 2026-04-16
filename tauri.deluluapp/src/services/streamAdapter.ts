@@ -9,8 +9,11 @@ import {
   bootstrapAddonManager,
   aggregateStremioStreamsByTmdb,
   resolveStreamViaAddon,
+  resolveStreamRace,
+  getRaceSources,
   healthCheckActiveAddon,
 } from '../addon_manager/manager';
+import type { AddonStreamSource } from '../addon_manager/types';
 
 export interface StreamAdapterResult {
   success: boolean;
@@ -23,6 +26,19 @@ export interface StreamAdapterResult {
   };
   subtitles?: SubtitleTrack[];
   error?: string;
+  /** All successful addon sources (for source switching UI) */
+  allSources?: AddonStreamSource[];
+  /** The addon that produced this stream */
+  sourceAddonId?: string;
+  sourceAddonName?: string;
+  /** Multi-audio map from motherbox: { audioName: { quality: url } } */
+  audios?: Record<string, Record<string, string>>;
+  /** Embedded proxy port (motherbox) */
+  proxyPort?: number;
+  /** Session ID (motherbox) */
+  sessionId?: string;
+  /** When true, addon handles its own proxying */
+  selfProxy?: boolean;
 }
 
 const LANG_MAP: Record<string, string> = {
@@ -34,8 +50,64 @@ const LANG_MAP: Record<string, string> = {
   ind: 'Indonesian',
 };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function normalizeAudioMap(rawAudios: unknown): Record<string, Record<string, string>> | undefined {
+  if (!isRecord(rawAudios)) return undefined;
+
+  const normalized: Record<string, Record<string, string>> = {};
+
+  for (const [audioName, audioEntry] of Object.entries(rawAudios)) {
+    if (!isRecord(audioEntry)) continue;
+
+    // MotherBox shape: { audioName: { streams: { "1080p": "..." } } }
+    // Legacy shape:   { audioName: { "1080p": "..." } }
+    const qualitySource = isRecord(audioEntry.streams)
+      ? (audioEntry.streams as Record<string, unknown>)
+      : audioEntry;
+
+    const filteredQualities: Record<string, string> = {};
+    for (const [quality, url] of Object.entries(qualitySource)) {
+      if (typeof url === 'string' && url.trim().length > 0) {
+        filteredQualities[quality] = url;
+      }
+    }
+
+    if (Object.keys(filteredQualities).length > 0) {
+      normalized[audioName] = filteredQualities;
+    }
+  }
+
+  return Object.keys(normalized).length > 0 ? normalized : undefined;
+}
+
+function normalizeSource(source: AddonStreamSource): AddonStreamSource {
+  const streamUrl = typeof source.streamUrl === 'string' && source.streamUrl.trim().length > 0
+    ? source.streamUrl
+    : undefined;
+
+  const subtitles = Array.isArray(source.subtitles)
+    ? source.subtitles.filter((sub) => typeof sub?.url === 'string' && sub.url.trim().length > 0)
+    : source.subtitles;
+
+  return {
+    ...source,
+    streamUrl,
+    subtitles,
+    audios: normalizeAudioMap(source.audios),
+  };
+}
+
+function isPlayableSource(source: AddonStreamSource): boolean {
+  return Boolean(source.success && source.streamUrl && source.streamUrl.trim().length > 0);
+}
+
 function processSubtitles(rawSubs: Array<{ url: string; language?: string }>): SubtitleTrack[] {
-  return rawSubs.map((sub) => {
+  return rawSubs
+    .filter((sub) => typeof sub.url === 'string' && sub.url.trim().length > 0)
+    .map((sub) => {
     let detectedLang = sub.language || 'Unknown';
     const urlMatch = sub.url.match(/\/([a-z]{2,3})(?:-\d+)?\.vtt$/i);
     if (urlMatch) {
@@ -43,7 +115,7 @@ function processSubtitles(rawSubs: Array<{ url: string; language?: string }>): S
       detectedLang = LANG_MAP[langCode] || langCode.toUpperCase();
     }
     return { url: sub.url, language: detectedLang };
-  });
+    });
 }
 
 function normalizeHeaders(rawHeaders?: Record<string, string>): Record<string, string> {
@@ -57,6 +129,24 @@ function normalizeHeaders(rawHeaders?: Record<string, string>): Record<string, s
     ...(origin ? { Origin: origin } : {}),
     ...(userAgent ? { 'User-Agent': userAgent } : {}),
   };
+}
+
+function mergeSourcesByAddonId(
+  existing: AddonStreamSource[],
+  incoming: AddonStreamSource[],
+): AddonStreamSource[] {
+  const merged = new Map<string, AddonStreamSource>();
+  for (const source of existing.map(normalizeSource)) {
+    if (isPlayableSource(source)) {
+      merged.set(source.addonId, source);
+    }
+  }
+  for (const source of incoming.map(normalizeSource)) {
+    if (isPlayableSource(source)) {
+      merged.set(source.addonId, source);
+    }
+  }
+  return Array.from(merged.values());
 }
 
 const inFlightRequests = new Map<string, Promise<StreamAdapterResult>>();
@@ -92,6 +182,31 @@ async function resolveViaStremioNormalizationLayer(
   }
 }
 
+/** Build a StreamAdapterResult from a single AddonStreamSource */
+function sourceToResult(
+  source: AddonStreamSource,
+  allSources: AddonStreamSource[],
+): StreamAdapterResult {
+  const normalizedSource = normalizeSource(source);
+  const sanitizedSources = mergeSourcesByAddonId([], [normalizedSource, ...allSources]);
+  const subtitles = processSubtitles(
+    (normalizedSource.subtitles || []) as Array<{ url: string; language?: string }>,
+  );
+  return {
+    success: true,
+    streamUrl: normalizedSource.streamUrl,
+    headers: normalizedSource.selfProxy ? {} : normalizeHeaders(normalizedSource.headers),
+    subtitles,
+    allSources: sanitizedSources,
+    sourceAddonId: normalizedSource.addonId,
+    sourceAddonName: normalizedSource.addonName,
+    audios: normalizedSource.audios,
+    proxyPort: normalizedSource.proxyPort,
+    sessionId: normalizedSource.sessionId,
+    selfProxy: normalizedSource.selfProxy,
+  };
+}
+
 async function callAddonRuntime(
   type: 'movie' | 'tv',
   tmdbId: number,
@@ -99,7 +214,67 @@ async function callAddonRuntime(
   episode?: number,
 ): Promise<StreamAdapterResult> {
   await bootstrapAddonManager();
+  const mediaKey = `${type}-${tmdbId}-${season}-${episode}`;
+  const raceRequest = {
+    mediaType: type,
+    tmdbId,
+    season,
+    episode,
+    timeoutMs: 30_000,
+  };
 
+  // Try the parallel race first (multi-addon)
+  try {
+    const race = await resolveStreamRace(raceRequest);
+    const winner = normalizeSource(race.winner);
+    const initialSources = mergeSourcesByAddonId([], race.allSources);
+
+    if (isPlayableSource(winner)) {
+      console.log(
+        `[StreamAdapter] Race winner: ${winner.addonId} (${winner.latencyMs}ms)`,
+      );
+      const result = sourceToResult(winner, initialSources);
+
+      // Poll for late-arriving sources in the background and scope updates to the current media key.
+      setTimeout(() => {
+        const maxPolls = 5;
+        let pollCount = 0;
+
+        const pollLateSources = async () => {
+          pollCount += 1;
+          try {
+            const lateSources = mergeSourcesByAddonId([], await getRaceSources(raceRequest));
+            if (lateSources.length > 0) {
+              const merged = mergeSourcesByAddonId(result.allSources || [], lateSources);
+              if (merged.length > (result.allSources || []).length) {
+                result.allSources = merged;
+                console.log(`[StreamAdapter] 📥 ${lateSources.length} late source(s) for ${mediaKey}`);
+                window.dispatchEvent(
+                  new CustomEvent('delulu-late-sources', {
+                    detail: { mediaKey, sources: merged },
+                  }),
+                );
+              }
+            }
+          } catch (e) {
+            console.warn('[StreamAdapter] Late source poll failed:', e);
+          }
+
+          if (pollCount < maxPolls) {
+            setTimeout(pollLateSources, 2000);
+          }
+        };
+
+        void pollLateSources();
+      }, 1500);
+
+      return result;
+    }
+  } catch (raceErr) {
+    console.warn('[StreamAdapter] Race failed, falling back to single addon:', raceErr);
+  }
+
+  // Fallback: single active addon
   const data = await resolveStreamViaAddon({
     mediaType: type,
     tmdbId,

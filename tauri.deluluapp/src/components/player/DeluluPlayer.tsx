@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import type { MutableRefObject } from 'react';
 import Hls from 'hls.js';
 import {
@@ -17,6 +17,8 @@ import {
     ChevronLeft,
     Check,
     X,
+    Layers,
+    Music,
 } from 'lucide-react';
 import { watchService } from '../../services/watchHistory';
 import { invoke } from '@tauri-apps/api/core';
@@ -117,6 +119,56 @@ interface DeluluPlayerProps {
     isActive?: boolean;
     reloadToken?: number;
     onControlsVisibilityChange?: (visible: boolean) => void;
+    // ── Source switching (race engine) ──
+    /** All successful addon sources from the race */
+    allSources?: Array<{
+        addonId: string;
+        addonName: string;
+        success: boolean;
+        streamUrl?: string;
+        headers?: Record<string, string>;
+        subtitles?: Array<{ url: string; language?: string }>;
+        audios?: Record<string, Record<string, string>>;
+        proxyPort?: number;
+        sessionId?: string;
+        selfProxy?: boolean;
+        latencyMs: number;
+    }>;
+    /** Multi-audio map from current source */
+    audios?: Record<string, Record<string, string>>;
+    /** Currently playing addon ID */
+    sourceAddonId?: string;
+    /** Currently playing addon name */
+    sourceAddonName?: string;
+    /** Self-proxy flag for current source */
+    selfProxy?: boolean;
+    /** Switch to a different source */
+    onSourceSwitch?: (source: {
+        addonId: string;
+        addonName: string;
+        success: boolean;
+        streamUrl?: string;
+        headers?: Record<string, string>;
+        subtitles?: Array<{ url: string; language?: string }>;
+        audios?: Record<string, Record<string, string>>;
+        proxyPort?: number;
+        sessionId?: string;
+        selfProxy?: boolean;
+        latencyMs: number;
+    }) => void;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null;
+}
+
+function qualityScore(label: string): number {
+    const n = Number.parseInt(label, 10);
+    if (Number.isFinite(n)) return n;
+    const normalized = label.trim().toLowerCase();
+    if (normalized === 'best') return 10_000;
+    if (normalized === 'auto') return 9_000;
+    return 0;
 }
 
 interface SubtitleTrack {
@@ -234,6 +286,12 @@ export function DeluluPlayer({
     isActive = true,
     reloadToken = 0,
     onControlsVisibilityChange,
+    allSources,
+    audios,
+    sourceAddonId,
+    sourceAddonName: _sourceAddonName,
+    selfProxy: _selfProxy,
+    onSourceSwitch,
 }: DeluluPlayerProps) {
     const internalVideoRef = useRef<HTMLVideoElement>(null);
     const videoRef = externalVideoRef || internalVideoRef;
@@ -272,12 +330,40 @@ export function DeluluPlayer({
     const [buffered, setBuffered] = useState(0);
     const [showSettings, setShowSettings] = useState(false);
     const [showSubtitleSettings, setShowSubtitleSettings] = useState(false);
+    const [showSourcesPanel, setShowSourcesPanel] = useState(false);
+    const [showAudioPanel, setShowAudioPanel] = useState(false);
     const [volumeHud, setVolumeHud] = useState<{ level: number; muted: boolean } | null>(null);
     const [seekHud, setSeekHud] = useState<{ delta: number; tick: number } | null>(null);
 
     useEffect(() => {
         onControlsVisibilityChange?.(showControls);
     }, [showControls, onControlsVisibilityChange]);
+
+    const audioOptions = useMemo(() => {
+        if (!isRecord(audios)) return [] as Array<{ audioName: string; bestQuality: string; bestUrl: string }>;
+
+        const options: Array<{ audioName: string; bestQuality: string; bestUrl: string }> = [];
+
+        for (const [audioName, audioEntry] of Object.entries(audios)) {
+            if (!isRecord(audioEntry)) continue;
+
+            const qualitySource = isRecord(audioEntry.streams)
+                ? (audioEntry.streams as Record<string, unknown>)
+                : audioEntry;
+
+            const validEntries = Object.entries(qualitySource)
+                .filter(([, url]) => typeof url === 'string' && url.trim().length > 0)
+                .map(([quality, url]) => [quality, url as string] as const);
+
+            if (validEntries.length === 0) continue;
+
+            validEntries.sort((a, b) => qualityScore(b[0]) - qualityScore(a[0]));
+            const [bestQuality, bestUrl] = validEntries[0];
+            options.push({ audioName, bestQuality, bestUrl });
+        }
+
+        return options;
+    }, [audios]);
 
     useEffect(() => {
         if (!showPauseOverlay) return;
@@ -597,9 +683,19 @@ export function DeluluPlayer({
                 hlsRef.current = null;
             };
         } else if (isM3U8 && video.canPlayType('application/vnd.apple.mpegurl')) {
-            setIsHLS(true); video.src = src; if (initialTime > 0) video.currentTime = initialTime;
+            // Native HLS (Safari / WebKit) — set src then play
+            setIsHLS(true);
+            video.src = src;
+            video.load();
+            if (initialTime > 0) video.currentTime = initialTime;
+            video.play().catch((e) => console.warn('[DeluluPlayer] Native HLS autoplay suppressed:', e));
         } else {
-            setIsHLS(false); video.src = src; if (initialTime > 0) video.currentTime = initialTime;
+            // Direct video (MP4, self-proxy stream URL, etc.)
+            setIsHLS(false);
+            video.src = src;
+            video.load();
+            if (initialTime > 0) video.currentTime = initialTime;
+            video.play().catch((e) => console.warn('[DeluluPlayer] Direct video autoplay suppressed:', e));
         }
         return () => {
             disposed = true;
@@ -1157,6 +1253,16 @@ export function DeluluPlayer({
                             </button>
                         )}
                         {subtitles.length > 0 && <button className={`delulu-btn ${activeSubtitle >= 0 ? 'active' : ''}`} onClick={() => setShowSubtitleSettings((v) => !v)}><Subtitles size={20} /></button>}
+                        {allSources && allSources.length > 1 && (
+                            <button className={`delulu-btn ${showSourcesPanel ? 'active' : ''}`} onClick={() => { setShowSourcesPanel((v) => !v); setShowAudioPanel(false); }} title="Sources">
+                                <Layers size={20} />
+                            </button>
+                        )}
+                        {audioOptions.length > 1 && (
+                            <button className={`delulu-btn ${showAudioPanel ? 'active' : ''}`} onClick={() => { setShowAudioPanel((v) => !v); setShowSourcesPanel(false); }} title="Audio Track">
+                                <Music size={20} />
+                            </button>
+                        )}
                         <button className={`delulu-btn ${isPiP ? 'active' : ''}`} onClick={togglePiP} title="Picture in Picture"><PictureInPicture size={20} /></button>
                         {showQualitySelector && isHLS && qualities.length > 0 && (
                             <button className="delulu-btn" onClick={() => setShowSettings(!showSettings)}>
@@ -1226,6 +1332,66 @@ export function DeluluPlayer({
                             </div>
                         </div>
                     )}
+                </div>
+            )}
+            {showSourcesPanel && allSources && allSources.length > 1 && (
+                <div className="delulu-panel delulu-sources-panel">
+                    <div className="delulu-panel-header"><span>Sources</span><button onClick={() => setShowSourcesPanel(false)}><X size={18} /></button></div>
+                    <div className="delulu-panel-options" data-lenis-prevent="true">
+                        {allSources.map((source) => {
+                            const isActive = source.addonId === sourceAddonId;
+                            return (
+                                <button
+                                    key={source.addonId}
+                                    className={`delulu-option ${isActive ? 'active' : ''}`}
+                                    onClick={() => {
+                                        if (!isActive && onSourceSwitch) {
+                                            onSourceSwitch(source);
+                                            setShowSourcesPanel(false);
+                                        }
+                                    }}
+                                >
+                                    <span className="delulu-source-label">
+                                        <strong>{source.addonName}</strong>
+                                        <span className="delulu-source-meta">{source.latencyMs}ms</span>
+                                    </span>
+                                    {isActive && <Check size={16} />}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+
+            {showAudioPanel && audioOptions.length > 1 && (
+                <div className="delulu-panel delulu-audio-panel">
+                    <div className="delulu-panel-header"><span>Audio</span><button onClick={() => setShowAudioPanel(false)}><X size={18} /></button></div>
+                    <div className="delulu-panel-options" data-lenis-prevent="true">
+                        {audioOptions.map(({ audioName, bestQuality, bestUrl }) => {
+                            const isPlaying = src === bestUrl;
+                            return (
+                                <button
+                                    key={audioName}
+                                    className={`delulu-option ${isPlaying ? 'active' : ''}`}
+                                    onClick={() => {
+                                        if (!isPlaying && onSourceSwitch && sourceAddonId) {
+                                            const currentSource = allSources?.find(s => s.addonId === sourceAddonId);
+                                            if (currentSource) {
+                                                onSourceSwitch({ ...currentSource, streamUrl: bestUrl });
+                                                setShowAudioPanel(false);
+                                            }
+                                        }
+                                    }}
+                                >
+                                    <span className="delulu-source-label">
+                                        <strong>{audioName}</strong>
+                                        <span className="delulu-source-meta">{bestQuality}</span>
+                                    </span>
+                                    {isPlaying && <Check size={16} />}
+                                </button>
+                            );
+                        })}
+                    </div>
                 </div>
             )}
         </div>

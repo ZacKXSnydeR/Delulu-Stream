@@ -218,6 +218,8 @@ pub fn run() {
             addon_runtime::addon_health_check_active,
             addon_runtime::addon_health_check_by_id,
             addon_runtime::addon_resolve_stream,
+            addon_runtime::addon_resolve_stream_all,
+            addon_runtime::addon_get_race_sources,
             addon_runtime::addon_get_active_header_defaults,
             addon_runtime::addon_stremio_fetch_manifest,
             addon_runtime::addon_stremio_request_resource,
