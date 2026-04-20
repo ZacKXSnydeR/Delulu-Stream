@@ -1,93 +1,122 @@
-# Delulu Stream
-Delulu Stream is a desktop-first streaming experience built with **Tauri + React + TypeScript**, focused on smooth playback, resilient HLS handling, and a polished media UX.
+<div align="center">
+  <img src="tauri.deluluapp/public/tauri.svg" alt="DeluluStream Logo" width="120" />
+  <h1>DeluluStream</h1>
+  <p><strong>The Convergence of Native Performance and Modular Extensibility</strong></p>
+  <p>A high-performance, provider-agnostic media orchestrator built with Rust, Tauri, and React 19.</p>
 
-## Highlights
-- Tauri desktop app with custom player chrome and mini-player support
-- HLS proxy pipeline with manifest probing and retry logic
-- Sidecar extractor integration via `gods_EYE`
-- TMDB-backed catalog, details pages, and trailer launch flow
-- Algolia-ready search pipeline and indexing script support
-- Watch history, list management, and local persistence
+  <p>
+    <a href="#philosophy"><img src="https://img.shields.io/badge/Architecture-Provider--Agnostic-orange?style=flat-square" alt="Architecture" /></a>
+    <a href="#technology"><img src="https://img.shields.io/badge/Stack-Rust%20%7C%20React%2019-blue?style=flat-square" alt="Stack" /></a>
+    <a href="#protocol"><img src="https://img.shields.io/badge/Protocol-JSON--RPC%20%7C%20Stremio-success?style=flat-square" alt="Protocol" /></a>
+    <a href="#license"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square" alt="License" /></a>
+  </p>
+</div>
 
-## Repository Layout
-- `tauri.deluluapp/`: main desktop application (frontend + Tauri backend)
-- `gods_EYE/`: extractor sidecar project used by the desktop app
-- `sounds/`: shared audio assets
+---
 
-## Tech Stack
-- Frontend: React 19, TypeScript, Vite, Framer Motion, hls.js
-- Desktop: Tauri v2 (Rust backend)
-- Data: TMDB proxying via backend, optional Algolia search index
-- Local storage: SQLite (Tauri plugin) + local cache layers
+## 📸 Interface Showcase
 
-## Prerequisites
-- Node.js 20+
-- Rust toolchain (`stable`) with Cargo
-- Microsoft C++ Build Tools (for Windows builds)
+<div align="center">
+  <img src="Screenshots/home.png" width="49%" />
+  <img src="Screenshots/playerpage.png" width="49%" />
+</div>
 
-## Environment Setup
-Use local-only env files and never commit secrets.
+---
 
-1. In `tauri.deluluapp/`, copy `.env.example` to `.env.local`
-2. Fill required keys:
-- `TMDB_READ_TOKEN`
-- `ALGOLIA_APP_ID`
-- `ALGOLIA_SEARCH_KEY`
-- `ALGOLIA_INDEX_NAME` (optional default: `delulu_content`)
+## 🏛️ Architecture & Philosophy
 
-Note: `.env.local` is git-ignored by design.
+DeluluStream is engineered as a **Modular Middleware Shell**. It follows a strict separation of concerns between the user interface and content logic. The core application is entirely stateless and does not contain any built-in media providers, search indices, or content-sourcing logic.
 
-## Development
-```bash
-cd tauri.deluluapp
-npm ci
-npm run tauri dev
+### 🛡️ Capability-Driven Interface Hydration
+The application implements a **Zero-Trust UI Architecture**. Unlike traditional streaming apps, the DeluluStream interface is a "Living Shell":
+- **Dynamic Dependency Injection:** Interactive elements—including Play buttons, Source Selectors, and Torrent interfaces—are only injected into the DOM when a user-installed addon broadcasts a matching capability.
+- **Provider Neutrality:** In its default state, the application functions purely as a local metadata explorer. It only becomes a media client when the user explicitly bridges it with external protocol providers.
+
+---
+
+## ✨ Engineering Excellence
+
+### 1. Hybrid Native Bridge
+DeluluStream serves as a high-speed orchestrator for two distinct modular ecosystems:
+- **Binary RPC Protocol:** Executes isolated native binaries via a high-performance **JSON-RPC 2.0** bridge. This allows for complex extraction and resolution logic to run at native speeds without blocking the UI's main thread.
+- **Decentralized Manifest Bridge:** Full native support for the Stremio Addon specification, allowing users to leverage a vast, decentralized ecosystem of community-maintained metadata and stream modules.
+
+### 2. High-Performance Network Middleware
+To ensure universal interoperability across diverse streaming protocols, DeluluStream features an internal networking stack built with **Rust (Hyper & Tokio)**:
+- **Zero-Copy Stream Proxying:** Handles high-throughput video data with near-zero memory overhead by utilizing async byte-streaming directly from source to the video buffer.
+- **Protocol Standardization:** An internal routing layer that standardizes remote resources (HLS, MP4, Dash) into a unified internal protocol, ensuring a consistent playback experience regardless of the underlying source.
+
+### 3. Parallel Resolution ("The Race")
+The application utilizes an advanced concurrency model for resource discovery:
+- **Real-time Source Racing:** Queries all active protocol providers in parallel. The orchestrator immediately initializes playback from the winner (fastest success) while late-arriving sources are dynamically merged into the player's source selector via background event streams.
+
+### 4. Privacy-First Data Persistence
+- **Encrypted Local State:** All user data, including watchlist, playback history, and configuration, is persisted in an encrypted local **SQLite** database via the `tauri-plugin-sql` layer. No telemetry or remote synchronization is performed by the core application.
+
+---
+
+## 🏗️ System Overview
+
+```text
+DeluluStream Workspace
+│
+├── tauri.deluluapp/         # The Orchestrator (Vite + React 19 + Tauri)
+│   ├── src/addon_manager/   # Bridge logic & Capability-based UI hydration
+│   ├── src/services/        # Local metadata & state management
+│   └── src-tauri/           # Native Rust Shell (LTO & Size Optimized)
+│
+├── core-middleware/         # Stateless Networking Stack (Rust)
+│   └── src/                 # High-throughput async I/O & resource mapping
+│
+└── addon-sdk/               # Development toolkit for protocol builders
+    ├── binary-rpc-rust/     # Reference JSON-RPC implementation
+    └── manifest-spec/       # Capability & Handshake documentation
 ```
 
-## Production Build
-### Windows x64 (NSIS)
-```bash
-cd tauri.deluluapp
-npm ci
-npm run tauri build -- --target x86_64-pc-windows-msvc --bundles nsis
+---
+
+## 🧩 Protocol Specifications
+
+External modules extend the shell via **JSON-RPC 2.0** over STDIN/STDOUT.
+
+**Handshake Example:**
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "initialize",
+  "params": {
+    "capabilities": ["stream.resolve", "subtitle.search"]
+  }
+}
 ```
 
-### Windows x64 (MSI)
-```bash
-cd tauri.deluluapp
-npm ci
-npm run tauri build -- --target x86_64-pc-windows-msvc --bundles msi
-```
+Once initialized, the orchestrator dynamically enables the corresponding UI components, allowing the user to interact with the capabilities provided by the module.
 
-## Security and Release Notes
-- Keep all runtime secrets in `.env.local` (never in tracked files)
-- Do not commit build caches (`target/`, `dist/`) or installer artifacts
-- Verify sidecar binaries match your build target architecture before release
+---
 
-## Important Disclaimer
-- This is a partially vibe-coded project. Bugs, rough edges, and mistakes can happen.
-- If you encounter errors, please view them with patience and kindness while the project keeps improving.
-- Delulu Stream does **not** host or own any video content.
-- If a title does not play or content is unavailable, that is usually a provider-side issue.
-- If you can add and maintain a new provider, contributions are very welcome.
+## 🚀 Deployment
 
-## Upcoming
-- Torrent streaming integration is currently in active development.
+1. **Native Environment:** Ensure Node.js (18+) and Rust (1.75+) are installed.
+2. **Setup:**
+   ```bash
+   npm install
+   cp .env.example .env
+   ```
+3. **Execution:**
+   ```bash
+   npm run tauri dev  # Development
+   npm run build      # Optimized Production Build
+   ```
 
-## License
-This project is licensed under the MIT License. See [LICENSE](./LICENSE).
+---
 
-## Screenshots
-![Home](./Screenshots/home.png)
-![Home 1](./Screenshots/home1.png)
-![Home 2](./Screenshots/home2.png)
-![Home 3](./Screenshots/home3.png)
-![Movie](./Screenshots/movie.png)
-![Movie 1](./Screenshots/movie1.png)
-![Random](./Screenshots/random.png)
-![TV](./Screenshots/tv.png)
-![TV 1](./Screenshots/tv1.png)
-![TV Page](./Screenshots/tvpage1.png)
-![TV Page Alt](./Screenshots/TVpsge.png)
-![Player Page](./Screenshots/playerpage.png)
-![Pause](./Screenshots/pause.png)
+## 📄 License & Disclaimer
+
+DeluluStream is released under the **MIT License**. 
+
+**Disclaimer:** DeluluStream is a provider-agnostic framework. It does not provide, host, or curate any media content. All content-related functionality is entirely dependent on external addons provided and maintained by third parties. The developers of DeluluStream are not responsible for any third-party modules or the content accessed through them.
+
+---
+<div align="center">
+  <i>Developed with precision by the Delulu Team</i>
+</div>
