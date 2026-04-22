@@ -34,6 +34,10 @@ tauri.deluluapp/src-tauri/bypass/node.exe
 embegator/
 embegator-publish/
 
+# Internal planning docs and scratch assets
+GEMINI_NATIVE_LOADING_PLAN.md
+image.png
+
 
 # Editor and OS files
 .vscode/*
