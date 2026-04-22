@@ -19,6 +19,7 @@ import {
     getTitle,
     getMediaType,
     getReleaseYear,
+    prefetchDetailsBundle,
     type TMDBContent,
     type TMDBMovie,
     type TMDBTVShow,
@@ -26,6 +27,8 @@ import {
 import { discoveryService } from '../services/discoveryService';
 import { watchService, type WatchHistoryItem } from '../services/watchHistory';
 import { useAddons } from '../context/AddonContext';
+import { cacheImage } from '../services/imageCache';
+import { globalLenis } from '../hooks/useLenis';
 import './Home.css';
 
 interface ContinueWatchingEntry {
@@ -39,6 +42,7 @@ interface ContinueWatchingEntry {
 }
 
 const HOME_CACHE_KEY = 'delulu_home_cache_v1';
+const HOME_SCROLL_KEY = 'delulu-scroll:/';
 
 interface PersistedHomeCache {
     hero: TMDBContent[];
@@ -157,6 +161,7 @@ export function Home() {
     const [showLeftArrow, setShowLeftArrow] = useState(false);
     const [showRightArrow, setShowRightArrow] = useState(true);
     const [showContinueWatchingNav, setShowContinueWatchingNav] = useState(false);
+    const hasRestoredScrollRef = useRef(false);
     const topThreeTrending = trending.slice(0, 3);
     const moodChips = ['Midnight Tension', 'Slow Burn', 'Cerebral', 'Pulse-Heavy', 'Lonely Nights', 'Cathartic'];
     const [selectedMood, setSelectedMood] = useState(moodChips[0]);
@@ -219,7 +224,7 @@ export function Home() {
                 : container.scrollLeft + scrollAmount;
         const start = container.scrollLeft;
         const distance = target - start;
-        const duration = 500;
+        const duration = 320;
         let startTime: number | null = null;
 
         const ease = (t: number) =>
@@ -254,12 +259,62 @@ export function Home() {
         });
     }, [heroItems, trending, popularMovies, popularTVShows, topRatedMovies]);
 
+    const navigateToDetails = useCallback((type: 'movie' | 'tv', tmdbId: number) => {
+        const currentY = window.scrollY;
+        cachedScrollY = currentY;
+        try {
+            sessionStorage.setItem(HOME_SCROLL_KEY, String(currentY));
+        } catch {
+            // ignore storage errors
+        }
+        prefetchDetailsBundle(type, tmdbId);
+        navigate(`/details/${type}/${tmdbId}`);
+    }, [navigate]);
+
     // Restore scroll position on mount, save on unmount
     useEffect(() => {
-        if (cachedScrollY > 0) {
-            requestAnimationFrame(() => window.scrollTo(0, cachedScrollY));
-        }
-        return () => { cachedScrollY = window.scrollY; };
+        const restoreScroll = () => {
+            if (hasRestoredScrollRef.current) return;
+
+            let targetY = cachedScrollY;
+            try {
+                const persisted = sessionStorage.getItem(HOME_SCROLL_KEY);
+                if (persisted) {
+                    const parsed = parseInt(persisted, 10);
+                    if (Number.isFinite(parsed) && parsed > 0) {
+                        targetY = Math.max(targetY, parsed);
+                    }
+                }
+            } catch {
+                // ignore storage errors
+            }
+
+            if (targetY <= 0) {
+                hasRestoredScrollRef.current = true;
+                return;
+            }
+
+            requestAnimationFrame(() => {
+                if (globalLenis) {
+                    globalLenis.scrollTo(targetY, { immediate: true });
+                } else {
+                    window.scrollTo(0, targetY);
+                }
+                hasRestoredScrollRef.current = true;
+            });
+        };
+
+        restoreScroll();
+
+        return () => {
+            const currentY = window.scrollY;
+            cachedScrollY = currentY;
+            try {
+                sessionStorage.setItem(HOME_SCROLL_KEY, String(currentY));
+            } catch {
+                // ignore storage errors
+            }
+        };
     }, []);
 
     const fetchContinueWatching = useCallback(async () => {
@@ -358,6 +413,24 @@ export function Home() {
     }, [fetchContinueWatching]);
 
     useEffect(() => {
+        const candidates = [
+            ...heroItems.slice(0, 5).flatMap((item) => [
+                getBackdropUrl(item.backdrop_path || item.poster_path, 'large'),
+                getPosterUrl(item.poster_path, 'medium'),
+            ]),
+            ...trending.slice(0, 20).map((item) => getPosterUrl(item.poster_path, 'medium')),
+            ...popularMovies.slice(0, 20).map((item) => getPosterUrl(item.poster_path, 'medium')),
+            ...popularTVShows.slice(0, 20).map((item) => getPosterUrl(item.poster_path, 'medium')),
+            ...topRatedMovies.slice(0, 20).map((item) => getPosterUrl(item.poster_path, 'medium')),
+        ];
+
+        const uniqueUrls = Array.from(new Set(candidates.filter(Boolean)));
+        uniqueUrls.forEach((url) => {
+            void cacheImage(url);
+        });
+    }, [heroItems, trending, popularMovies, popularTVShows, topRatedMovies]);
+
+    useEffect(() => {
         const onFocus = () => {
             if (document.visibilityState !== 'visible') return;
             fetchContinueWatching().catch(console.error);
@@ -384,7 +457,7 @@ export function Home() {
         if (!hasAddon) {
             const mediaType = entry.history.media_type;
             const tmdbId = entry.history.tmdb_id;
-            navigate(`/details/${mediaType}/${tmdbId}`);
+            navigateToDetails(mediaType, tmdbId);
             return;
         }
         const { history, content, nextEpisode } = entry;
@@ -555,7 +628,7 @@ export function Home() {
                                     <button
                                         key={`${mediaType}-${item.id}`}
                                         className="top3-card"
-                                        onClick={() => navigate(`/details/${mediaType}/${item.id}`)}
+                                        onClick={() => navigateToDetails(mediaType, item.id)}
                                         aria-label={`Open ${title}`}
                                     >
                                         <span className="top3-rank-bg" aria-hidden="true">{index + 1}</span>
@@ -620,7 +693,7 @@ export function Home() {
                                         key={`mood-${mediaType}-${item.id}`}
                                         type="button"
                                         className="mood-editorial-item"
-                                        onClick={() => navigate(`/details/${mediaType}/${item.id}`)}
+                                        onClick={() => navigateToDetails(mediaType, item.id)}
                                     >
                                         <span className="mood-item-rank">{index + 1}</span>
                                         <img

@@ -4,6 +4,7 @@ import type {
   AddonInstallRecord,
   AddonStateStore,
   CatalogResponse,
+  RaceStreamResult,
   ResolveStreamRequest,
   ResolveStreamResponse,
   StremioAddonState,
@@ -100,6 +101,24 @@ export async function resolveStreamViaAddon(
   req: ResolveStreamRequest,
 ): Promise<ResolveStreamResponse> {
   return invoke<ResolveStreamResponse>('addon_resolve_stream', { request: req });
+}
+
+/** Race ALL installed addons in parallel for the fastest stream.
+ *  Returns the winner (first success) immediately; late sources arrive via getRaceSources(). */
+export async function resolveStreamRace(
+  req: ResolveStreamRequest,
+): Promise<RaceStreamResult> {
+  return invoke<RaceStreamResult>('addon_resolve_stream_all', { request: req });
+}
+
+/** Poll for late-arriving addon sources collected in background after the winner returned.
+ *  Call this once after the player starts to merge slower addons into the Sources panel. */
+export async function getRaceSources(
+  req?: Partial<ResolveStreamRequest>,
+): Promise<import('./types').AddonStreamSource[]> {
+  return invoke<import('./types').AddonStreamSource[]>('addon_get_race_sources', {
+    request: req ?? null,
+  });
 }
 
 export async function getActiveHeaderDefaults(): Promise<{

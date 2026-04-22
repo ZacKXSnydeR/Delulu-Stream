@@ -7,6 +7,7 @@ import {
     getTitle,
     getReleaseYear,
     getMediaType,
+    prefetchDetailsBundle,
 } from '../../services/tmdb';
 import { useAddons } from '../../context/AddonContext';
 import './HeroCarousel.css';
@@ -77,6 +78,18 @@ export function HeroCarousel({ items, autoPlayInterval = 8000 }: HeroCarouselPro
     const TRANSITION_MS = 1000;
     const TITLE_TYPE_MS = 42;
     const OVERVIEW_TYPE_MS = 18;
+
+    useEffect(() => {
+        if (!activeItem || items.length === 0) return;
+
+        prefetchDetailsBundle(getMediaType(activeItem), activeItem.id);
+
+        const nextIndex = (activeIndex + 1) % items.length;
+        const nextItem = items[nextIndex];
+        if (nextItem) {
+            prefetchDetailsBundle(getMediaType(nextItem), nextItem.id);
+        }
+    }, [activeIndex, activeItem, items]);
 
     useEffect(() => {
         if (!items.length) return;

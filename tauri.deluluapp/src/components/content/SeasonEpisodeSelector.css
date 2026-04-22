@@ -29,7 +29,7 @@
     font-size: 0.95rem;
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 
 .season-dropdown-trigger:hover {
@@ -43,7 +43,7 @@
 
 .season-dropdown-arrow {
     opacity: 0.6;
-    transition: transform 0.25s ease;
+    transition: transform 0.2s ease;
 }
 
 .season-dropdown-arrow.open {
@@ -139,7 +139,7 @@
     font-weight: 500;
     text-align: left;
     cursor: pointer;
-    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    transition: background-color 0.2s ease, color 0.2s ease, transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
     overflow: hidden;
     opacity: 0;
     animation: itemStagger 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
@@ -180,7 +180,7 @@
     height: 18px;
     background: rgba(255, 255, 255, 0.4);
     border-radius: 0 4px 4px 0;
-    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
     z-index: 5;
 }
 
@@ -233,7 +233,7 @@
 .season-episode-count {
     font-size: 0.8rem;
     color: rgba(255, 255, 255, 0.35);
-    transition: color 0.25s ease;
+    transition: color 0.2s ease;
 }
 
 .season-dropdown-item:hover .season-episode-count {
@@ -248,6 +248,7 @@
    EPISODES LIST
 ------------------------- */
 .episodes-list {
+    position: relative;
     display: flex;
     flex-direction: column;
     gap: 12px;
@@ -266,11 +267,45 @@
     font-size: 0.9rem;
 }
 
+.episodes-switching-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 12px;
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(4px);
+    border-radius: 12px;
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 0.85rem;
+    font-weight: 500;
+    animation: fadeIn 0.2s ease forwards;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
 .episodes-spinner {
     width: 28px;
     height: 28px;
     border: 2px solid rgba(255, 255, 255, 0.1);
-    border-top-color: var(--color-accent-primary);
+    border-top-color: #e50914;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+.episodes-spinner-small {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-top-color: #fff;
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
 }
@@ -289,7 +324,7 @@
     color: #fff;
     font-size: 0.85rem;
     cursor: pointer;
-    transition: background 0.15s ease;
+    transition: background-color 0.15s ease;
 }
 
 .episodes-error button:hover {
@@ -309,7 +344,7 @@
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 14px;
     cursor: pointer;
-    transition: all 0.25s ease;
+    transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .episode-card:hover {

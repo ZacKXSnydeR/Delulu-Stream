@@ -4,9 +4,13 @@ import {
     discoverTVShows,
     getBackdropUrl,
     getPosterUrl,
+    prefetchDetailsBundle,
     getTVShowDetails,
     type TMDBTVShow,
 } from '../services/tmdb';
+import { cacheImage } from '../services/imageCache';
+import { globalLenis } from '../hooks/useLenis';
+import { useDeferredBusy } from '../hooks/useDeferredBusy';
 import './Movies.css';
 import './TVShows.css';
 
@@ -53,6 +57,42 @@ const SHOW_MOODS: ShowMoodRow[] = [
 
 const DEFAULT_TONE = '82, 103, 138';
 const POSTERS_PER_ROW = 6;
+const TVSHOWS_CACHE_KEY = 'delulu_tvshows_cache_v1';
+const TVSHOWS_SCROLL_KEY = 'delulu-scroll:/tv-shows';
+
+interface PersistedTVShowsCache {
+    shows: TMDBTVShow[];
+    page: number;
+    totalPages: number;
+    featuredIndex: number;
+    runtimes: Record<number, number>;
+}
+
+function readPersistedTVShowsCache(): PersistedTVShowsCache | null {
+    try {
+        const raw = sessionStorage.getItem(TVSHOWS_CACHE_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw) as Partial<PersistedTVShowsCache>;
+        if (!Array.isArray(parsed.shows) || parsed.shows.length === 0) return null;
+        return {
+            shows: parsed.shows as TMDBTVShow[],
+            page: typeof parsed.page === 'number' ? parsed.page : 1,
+            totalPages: typeof parsed.totalPages === 'number' ? parsed.totalPages : 1,
+            featuredIndex: typeof parsed.featuredIndex === 'number' ? parsed.featuredIndex : 0,
+            runtimes: parsed.runtimes ?? {},
+        };
+    } catch {
+        return null;
+    }
+}
+
+function persistTVShowsCache(cache: PersistedTVShowsCache) {
+    try {
+        sessionStorage.setItem(TVSHOWS_CACHE_KEY, JSON.stringify(cache));
+    } catch {
+        // ignore storage errors
+    }
+}
 
 function dedupeShows(items: TMDBTVShow[]): TMDBTVShow[] {
     return Array.from(new Map(items.map((show) => [show.id, show])).values());
@@ -65,6 +105,15 @@ let cachedTotalPages = 0;
 let cachedFeaturedIndex = 0;
 let cachedRuntimes: Record<number, number> = {};
 let cachedScrollY = 0;
+
+const persistedTVShowsCache = readPersistedTVShowsCache();
+if (persistedTVShowsCache) {
+    if (cachedShows.length === 0) cachedShows = persistedTVShowsCache.shows;
+    if (cachedPage === 0) cachedPage = persistedTVShowsCache.page;
+    if (cachedTotalPages === 0) cachedTotalPages = persistedTVShowsCache.totalPages;
+    if (cachedFeaturedIndex === 0) cachedFeaturedIndex = persistedTVShowsCache.featuredIndex;
+    if (Object.keys(cachedRuntimes).length === 0) cachedRuntimes = persistedTVShowsCache.runtimes;
+}
 
 export function TVShows() {
     const navigate = useNavigate();
@@ -87,8 +136,10 @@ export function TVShows() {
     const isFetchingRef = useRef(false);
     const loadMoreTriggerRef = useRef<HTMLDivElement | null>(null);
     const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const hasRestoredScrollRef = useRef(false);
 
     const hasMore = totalPages > 0 && page < totalPages;
+    const showInitialLoading = useDeferredBusy(isLoading && shows.length === 0, 160);
 
     // Sync state to module-level cache on changes
     useEffect(() => { cachedShows = shows; }, [shows]);
@@ -96,13 +147,56 @@ export function TVShows() {
     useEffect(() => { cachedTotalPages = totalPages; }, [totalPages]);
     useEffect(() => { cachedFeaturedIndex = featuredIndex; }, [featuredIndex]);
     useEffect(() => { cachedRuntimes = runtimeById; }, [runtimeById]);
+    useEffect(() => {
+        if (!shows.length) return;
+        persistTVShowsCache({
+            shows,
+            page,
+            totalPages,
+            featuredIndex,
+            runtimes: runtimeById,
+        });
+    }, [shows, page, totalPages, featuredIndex, runtimeById]);
 
     // Restore scroll position on mount, save on unmount
     useEffect(() => {
-        if (cachedScrollY > 0) {
-            requestAnimationFrame(() => window.scrollTo(0, cachedScrollY));
-        }
-        return () => { cachedScrollY = window.scrollY; };
+        const restoreScroll = () => {
+            if (hasRestoredScrollRef.current) return;
+
+            let targetY = cachedScrollY;
+            try {
+                const persisted = sessionStorage.getItem(TVSHOWS_SCROLL_KEY);
+                if (persisted) {
+                    const parsed = parseInt(persisted, 10);
+                    if (Number.isFinite(parsed) && parsed > 0) targetY = Math.max(targetY, parsed);
+                }
+            } catch {
+                // ignore storage errors
+            }
+
+            if (targetY <= 0) {
+                hasRestoredScrollRef.current = true;
+                return;
+            }
+
+            requestAnimationFrame(() => {
+                if (globalLenis) globalLenis.scrollTo(targetY, { immediate: true });
+                else window.scrollTo(0, targetY);
+                hasRestoredScrollRef.current = true;
+            });
+        };
+
+        restoreScroll();
+
+        return () => {
+            const y = window.scrollY;
+            cachedScrollY = y;
+            try {
+                sessionStorage.setItem(TVSHOWS_SCROLL_KEY, String(y));
+            } catch {
+                // ignore storage errors
+            }
+        };
     }, []);
 
     const fetchShows = useCallback(async (pageNum: number, append: boolean) => {
@@ -115,7 +209,7 @@ export function TVShows() {
         if (append) {
             setIsLoadingMore(true);
         } else {
-            setIsLoading(true);
+            if (shows.length === 0) setIsLoading(true);
         }
 
         try {
@@ -135,7 +229,7 @@ export function TVShows() {
             setIsLoadingMore(false);
             isFetchingRef.current = false;
         }
-    }, []);
+    }, [shows.length]);
 
     useEffect(() => {
         // Skip initial fetch if we already have cached data
@@ -211,6 +305,31 @@ export function TVShows() {
         if (withoutCurated.length) return withoutCurated;
         return shows.filter((show) => show.poster_path);
     }, [shows, moodRows]);
+
+    useEffect(() => {
+        if (shows.length === 0) return;
+
+        const urls = Array.from(new Set([
+            ...featuredCandidates.slice(0, 6).flatMap((show) => [
+                getBackdropUrl(show.backdrop_path || show.poster_path, 'large'),
+                getPosterUrl(show.poster_path, 'medium'),
+            ]),
+            ...moodRows.flatMap((row) => row.shows.map((show) => getPosterUrl(show.poster_path, 'medium'))),
+            ...discoverItems.slice(0, 60).map((show) => getPosterUrl(show.poster_path, 'medium')),
+        ].filter(Boolean)));
+
+        urls.forEach((url) => {
+            void cacheImage(url);
+        });
+
+        const prefetchTargets = [
+            ...featuredCandidates.slice(0, 4),
+            ...discoverItems.slice(0, 16),
+        ];
+        prefetchTargets.forEach((show) => {
+            prefetchDetailsBundle('tv', show.id);
+        });
+    }, [shows.length, featuredCandidates, moodRows, discoverItems]);
 
     useEffect(() => {
         if (!featuredShow) {
@@ -382,6 +501,14 @@ export function TVShows() {
     }, [featuredCandidates.length]);
 
     const openDetails = (showId: number) => {
+        const y = window.scrollY;
+        cachedScrollY = y;
+        try {
+            sessionStorage.setItem(TVSHOWS_SCROLL_KEY, String(y));
+        } catch {
+            // ignore storage errors
+        }
+        prefetchDetailsBundle('tv', showId);
         navigate(`/details/tv/${showId}`);
     };
 
@@ -473,7 +600,7 @@ export function TVShows() {
         };
     }, []);
 
-    if (isLoading) {
+    if (showInitialLoading && shows.length === 0) {
         return (
             <div className="tvshows-page page movies-cinema-loading tv-cinema-loading">
                 <div className="movies-cinema-loading-bar" />

@@ -9,11 +9,27 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::Manager;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Command;
+use std::collections::HashMap;
 
 const ADDON_STATE_FILE: &str = "addon_manager/state.json";
 const ADDON_BIN_DIR: &str = "addon_manager/addons";
-const DEFAULT_CATALOG_URL: &str = "https://raw.githubusercontent.com/ZacKXSnydeR/Delulu-EmbeGator-Addon/main/catalog.json";
+const DEFAULT_CATALOG_URL: &str = "https://raw.githubusercontent.com/ZacKXSnydeR/DELULU----ADDONS/main/catalog.json";
 const DEFAULT_REQUEST_TIMEOUT_MS: u64 = 30_000;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  Live addon process management — keeps self-proxy addon children alive.
+//  Background race source collection for late-arriving addons.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// Live addon child processes (self-proxy addons like motherbox stay alive for streaming)
+static LIVE_ADDON_CHILDREN: std::sync::LazyLock<
+    tokio::sync::Mutex<HashMap<String, tokio::process::Child>>,
+> = std::sync::LazyLock::new(|| tokio::sync::Mutex::new(HashMap::new()));
+
+/// Late-arriving race sources collected in background after the winner returns
+static RACE_LATE_SOURCES: std::sync::LazyLock<
+    tokio::sync::Mutex<HashMap<String, Vec<AddonStreamSource>>>,
+> = std::sync::LazyLock::new(|| tokio::sync::Mutex::new(HashMap::new()));
 
 // Replace this with your real publisher key pair id+pubkey.
 const OFFICIAL_PUBLISHER_KEYS: &[(&str, &str)] = &[
@@ -105,6 +121,15 @@ pub struct ResolveStreamRequest {
     pub timeout_ms: Option<u64>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct GetRaceSourcesRequest {
+    pub media_type: Option<String>,
+    pub tmdb_id: Option<u32>,
+    pub season: Option<u32>,
+    pub episode: Option<u32>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ResolveStreamResult {
@@ -118,11 +143,53 @@ pub struct ResolveStreamResult {
     pub addon_name: Option<String>,
 }
 
+/// Result from a single addon in the race
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct AddonStreamSource {
+    pub addon_id: String,
+    pub addon_name: String,
+    pub success: bool,
+    pub stream_url: Option<String>,
+    pub headers: Option<Value>,
+    pub subtitles: Option<Value>,
+    /// Multi-audio map: { audioName: { quality: url } } (motherbox)
+    pub audios: Option<Value>,
+    /// Embedded proxy port (motherbox self-proxy)
+    pub proxy_port: Option<u16>,
+    /// Session ID for the embedded proxy
+    pub session_id: Option<String>,
+    /// When true, addon handles its own proxying — app should NOT inject CDN headers
+    pub self_proxy: Option<bool>,
+    pub error_code: Option<String>,
+    pub error_message: Option<String>,
+    pub latency_ms: u64,
+}
+
+/// Race result: first winner + all sources collected for source switching
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RaceStreamResult {
+    pub winner: AddonStreamSource,
+    pub all_sources: Vec<AddonStreamSource>,
+    pub errors: Vec<AddonStreamSource>,
+}
+
 fn now_ts() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_millis() as u64)
         .unwrap_or(0)
+}
+
+fn race_key(media_type: &str, tmdb_id: u32, season: Option<u32>, episode: Option<u32>) -> String {
+    format!(
+        "{}:{}:{}:{}",
+        media_type.to_lowercase(),
+        tmdb_id,
+        season.unwrap_or(0),
+        episode.unwrap_or(0)
+    )
 }
 
 fn app_data_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
@@ -471,16 +538,140 @@ async fn run_addon_rpc(
         .await
         .map_err(|_| "Addon RPC timeout".to_string())??;
 
+    // Kill the child FIRST — ensures stderr pipe closes so drain doesn't block forever
+    let _ = child.kill().await;
+
+    // Drain stderr with a safety timeout (just for logging, never blocks)
     if let Some(mut err_reader) = stderr {
         let mut stderr_buf = String::new();
-        let _ = tokio::io::AsyncReadExt::read_to_string(&mut err_reader, &mut stderr_buf).await;
-        if !stderr_buf.trim().is_empty() {
-            println!("[AddonRuntime] STDERR: {}", stderr_buf);
+        let drain = tokio::io::AsyncReadExt::read_to_string(&mut err_reader, &mut stderr_buf);
+        if let Ok(Ok(_)) = tokio::time::timeout(std::time::Duration::from_secs(2), drain).await {
+            if !stderr_buf.trim().is_empty() {
+                println!("[AddonRuntime] STDERR: {}", stderr_buf);
+            }
         }
     }
 
-    let _ = child.kill().await;
     Ok(result)
+}
+
+/// Like run_addon_rpc but returns the child process ALIVE (for self-proxy addons).
+/// The caller is responsible for killing or storing the child.
+async fn run_addon_rpc_keepalive(
+    app: &tauri::AppHandle,
+    binary_path: &Path,
+    entry_command: &str,
+    method: &str,
+    params: Value,
+    timeout_ms: u64,
+) -> Result<(Value, tokio::process::Child), String> {
+    let mut args = parse_entry_command(entry_command);
+    if args.is_empty() {
+        args.push("rpc".to_string());
+    }
+
+    let mut command = Command::new(binary_path);
+    command
+        .args(args)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+
+    if let Some(bypass_path) = resolve_runtime_bypass_script_path(app) {
+        command.env("EMBEGATOR_BYPASS_PATH", bypass_path);
+    }
+
+    let mut child = command
+        .spawn()
+        .map_err(|e| format!("Failed to start addon process: {e}"))?;
+
+    let mut stdin = child
+        .stdin
+        .take()
+        .ok_or_else(|| "Addon process stdin unavailable".to_string())?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| "Addon process stdout unavailable".to_string())?;
+
+    // Drain stderr in background (non-blocking, just for logging)
+    if let Some(stderr) = child.stderr.take() {
+        tokio::spawn(async move {
+            let mut reader = BufReader::new(stderr);
+            let mut line = String::new();
+            loop {
+                line.clear();
+                match reader.read_line(&mut line).await {
+                    Ok(0) => break,
+                    Ok(_) => {
+                        let trimmed = line.trim();
+                        if !trimmed.is_empty() {
+                            println!("[AddonRuntime] STDERR: {}", trimmed);
+                        }
+                    }
+                    Err(_) => break,
+                }
+            }
+        });
+    }
+
+    let req_id = now_ts();
+    let request = json!({
+        "id": req_id,
+        "jsonrpc": "2.0",
+        "protocolVersion": "1.0",
+        "method": method,
+        "params": params
+    });
+    let req_line = serde_json::to_string(&request).map_err(|e| format!("Request encode failed: {e}"))?;
+    stdin
+        .write_all(format!("{req_line}\n").as_bytes())
+        .await
+        .map_err(|e| format!("Failed writing RPC request: {e}"))?;
+    stdin
+        .flush()
+        .await
+        .map_err(|e| format!("Failed flushing RPC stdin: {e}"))?;
+
+    let read_stdout = async move {
+        let mut reader = BufReader::new(stdout);
+        let mut line = String::new();
+        loop {
+            line.clear();
+            let read = reader
+                .read_line(&mut line)
+                .await
+                .map_err(|e| format!("Failed reading addon stdout: {e}"))?;
+            if read == 0 {
+                break;
+            }
+            let trimmed = line.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+            if let Ok(value) = serde_json::from_str::<Value>(trimmed) {
+                let is_match = value
+                    .get("id")
+                    .and_then(|v| v.as_u64())
+                    .map(|id| id == req_id)
+                    .unwrap_or(false);
+                if is_match {
+                    return Ok(value);
+                }
+            }
+        }
+        Err("No valid RPC response from addon".to_string())
+    };
+
+    let result = tokio::time::timeout(std::time::Duration::from_millis(timeout_ms), read_stdout)
+        .await
+        .map_err(|_| "Addon RPC timeout".to_string())??;
+
+    // Keep stdin open so addons that rely on a live stdin loop (self-proxy) stay alive.
+    child.stdin = Some(stdin);
+
+    // Return child ALIVE — caller decides lifecycle
+    Ok((result, child))
 }
 
 fn resolve_runtime_bypass_script_path(app: &tauri::AppHandle) -> Option<String> {
@@ -858,7 +1049,7 @@ pub async fn addon_resolve_stream(
         "timeoutMs": timeout_ms
     });
 
-    let rpc_result = run_addon_rpc(
+    let rpc_result = run_addon_rpc_keepalive(
         &app,
         Path::new(&binary_path),
         &asset.entry_command,
@@ -869,12 +1060,45 @@ pub async fn addon_resolve_stream(
     .await;
 
     match rpc_result {
-        Ok(v) => {
+        Ok((v, mut child)) => {
             let result_node = v.get("result").cloned().unwrap_or_else(|| json!({}));
             let success = result_node
                 .get("success")
                 .and_then(|x| x.as_bool())
                 .unwrap_or(false);
+            let is_self_proxy = result_node
+                .get("selfProxy")
+                .and_then(|x| x.as_bool())
+                .unwrap_or(false);
+
+            if success && is_self_proxy {
+                if let Some(port) = result_node
+                    .get("proxyPort")
+                    .and_then(|x| x.as_u64())
+                    .map(|p| p as u16)
+                {
+                    crate::proxy::register_addon_proxy_port(port);
+                }
+
+                let previous = {
+                    let mut children = LIVE_ADDON_CHILDREN.lock().await;
+                    children.remove(&addon_id)
+                };
+
+                if let Some(mut prev) = previous {
+                    let _ = prev.kill().await;
+                    let _ = prev.wait().await;
+                }
+
+                LIVE_ADDON_CHILDREN
+                    .lock()
+                    .await
+                    .insert(addon_id.clone(), child);
+            } else {
+                let _ = child.kill().await;
+                let _ = child.wait().await;
+            }
+
             let response = ResolveStreamResult {
                 success,
                 stream_url: result_node.get("streamUrl").and_then(|x| x.as_str()).map(|s| s.to_string()),
@@ -915,6 +1139,335 @@ pub async fn addon_resolve_stream(
             })
         }
     }
+}
+
+/// Helper: parse an addon RPC response into an AddonStreamSource
+fn parse_addon_source(
+    rpc_value: &Value,
+    addon_id: &str,
+    addon_name: &str,
+    latency: u64,
+) -> AddonStreamSource {
+    let r = rpc_value.get("result").cloned().unwrap_or_else(|| json!({}));
+    let success = r.get("success").and_then(|x| x.as_bool()).unwrap_or(false);
+    AddonStreamSource {
+        addon_id: addon_id.to_string(),
+        addon_name: addon_name.to_string(),
+        success,
+        stream_url: r.get("streamUrl").and_then(|x| x.as_str()).map(String::from),
+        headers: r.get("headers").cloned(),
+        subtitles: r.get("subtitles").cloned(),
+        audios: r.get("audios").cloned(),
+        proxy_port: r.get("proxyPort").and_then(|x| x.as_u64()).map(|p| p as u16),
+        session_id: r.get("sessionId").and_then(|x| x.as_str()).map(String::from),
+        self_proxy: r.get("selfProxy").and_then(|x| x.as_bool()),
+        error_code: r.get("errorCode").and_then(|x| x.as_str()).map(String::from),
+        error_message: r.get("errorMessage").and_then(|x| x.as_str()).map(String::from),
+        latency_ms: latency,
+    }
+}
+
+/// Race result message sent from spawned tasks back to the race coordinator
+struct RaceMessage {
+    source: AddonStreamSource,
+    /// Set only for self-proxy addons — the live child process to preserve
+    child: Option<tokio::process::Child>,
+}
+
+#[tauri::command]
+pub async fn addon_resolve_stream_all(
+    app: tauri::AppHandle,
+    request: ResolveStreamRequest,
+) -> Result<RaceStreamResult, String> {
+    let race_key = race_key(
+        &request.media_type,
+        request.tmdb_id,
+        request.season,
+        request.episode,
+    );
+
+    // Kill any previously-live addon children from a prior race
+    {
+        let mut children = LIVE_ADDON_CHILDREN.lock().await;
+        for (id, mut child) in children.drain() {
+            println!("[AddonRace] 🔪 Killing previous live addon: {}", id);
+            let _ = child.kill().await;
+            let _ = child.wait().await;
+        }
+    }
+    // Clear late sources for this request key (leave other keys untouched)
+    {
+        let mut late = RACE_LATE_SOURCES.lock().await;
+        late.remove(&race_key);
+    }
+
+    let store = read_store(&app)?;
+    let platform_key = get_platform_key();
+
+    let ready_addons: Vec<AddonInstallRecord> = store
+        .addons
+        .iter()
+        .filter(|a| {
+            a.install_state == "ready"
+                && a.manifest.capabilities.iter().any(|c| {
+                    c == "resolveStream" || c == "stream.resolve"
+                })
+                && a.manifest.platform_assets.contains_key(&platform_key)
+        })
+        .cloned()
+        .collect();
+
+    if ready_addons.is_empty() {
+        return Err("No streaming addons installed".to_string());
+    }
+
+    println!(
+        "[AddonRace] Racing {} addons: {:?}",
+        ready_addons.len(),
+        ready_addons.iter().map(|a| &a.manifest.id).collect::<Vec<_>>()
+    );
+
+    let timeout_ms = request.timeout_ms.unwrap_or(12_000);
+    let addon_count = ready_addons.len();
+    let (tx, mut rx) = tokio::sync::mpsc::channel::<RaceMessage>(addon_count);
+
+    // ─── Spawn ALL addons concurrently ───────────────────────────────────
+    for record in &ready_addons {
+        let tx = tx.clone();
+        let app = app.clone();
+        let record = record.clone();
+        let asset = match record.manifest.platform_assets.get(&platform_key) {
+            Some(a) => a.clone(),
+            None => continue,
+        };
+        let params = serde_json::json!({
+            "mediaType": request.media_type,
+            "tmdbId": request.tmdb_id,
+            "season": request.season,
+            "episode": request.episode,
+            "preferredLanguage": request.preferred_language,
+            "timeoutMs": timeout_ms
+        });
+
+        tokio::spawn(async move {
+            let start = now_ts();
+            // Use keepalive variant — we decide per-addon whether to kill
+            let rpc_result = run_addon_rpc_keepalive(
+                &app,
+                Path::new(&record.binary_path),
+                &asset.entry_command,
+                "resolveStream",
+                params,
+                timeout_ms + 5_000,
+            )
+            .await;
+            let latency = now_ts().saturating_sub(start);
+
+            let msg = match rpc_result {
+                Ok((v, child)) => {
+                    let source = parse_addon_source(
+                        &v,
+                        &record.manifest.id,
+                        &record.manifest.name,
+                        latency,
+                    );
+                    // Self-proxy addons keep their child alive; others get killed
+                    let is_self_proxy = source.self_proxy.unwrap_or(false) && source.success;
+                    if is_self_proxy {
+                        RaceMessage { source, child: Some(child) }
+                    } else {
+                        // Kill non-self-proxy child immediately
+                        let mut c = child;
+                        let _ = c.kill().await;
+                        let _ = c.wait().await;
+                        RaceMessage { source, child: None }
+                    }
+                }
+                Err(err) => RaceMessage {
+                    source: AddonStreamSource {
+                        addon_id: record.manifest.id.clone(),
+                        addon_name: record.manifest.name.clone(),
+                        success: false,
+                        error_code: Some("CRASHED".to_string()),
+                        error_message: Some(err),
+                        latency_ms: latency,
+                        ..Default::default()
+                    },
+                    child: None,
+                },
+            };
+
+            if msg.source.success {
+                println!(
+                    "[AddonRace] ✅ {} returned in {}ms{}",
+                    msg.source.addon_id,
+                    msg.source.latency_ms,
+                    if msg.child.is_some() { " (keepalive)" } else { "" }
+                );
+            } else {
+                println!(
+                    "[AddonRace] ❌ {} failed in {}ms: {}",
+                    msg.source.addon_id,
+                    msg.source.latency_ms,
+                    msg.source.error_message.as_deref().unwrap_or("unknown")
+                );
+            }
+
+            let _ = tx.send(msg).await;
+        });
+    }
+    drop(tx);
+
+    // ─── Wait for FIRST success only ─────────────────────────────────────
+    let mut winner: Option<AddonStreamSource> = None;
+    let mut errors: Vec<AddonStreamSource> = Vec::new();
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_millis(timeout_ms);
+    let mut responded = 0usize;
+
+    while responded < addon_count {
+        let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
+        if remaining.is_zero() {
+            println!("[AddonRace] ⏰ Deadline reached before any winner");
+            break;
+        }
+
+        match tokio::time::timeout(remaining, rx.recv()).await {
+            Ok(Some(msg)) => {
+                responded += 1;
+                if msg.source.success {
+                    // Register proxy port
+                    if let Some(port) = msg.source.proxy_port {
+                        crate::proxy::register_addon_proxy_port(port);
+                        println!("[AddonRace] 🔓 Whitelisted addon proxy port {}", port);
+                    }
+                    // Store live child process
+                    if let Some(child) = msg.child {
+                        let addon_id = msg.source.addon_id.clone();
+                        tokio::spawn(async move {
+                            LIVE_ADDON_CHILDREN.lock().await.insert(addon_id, child);
+                        });
+                    }
+                    winner = Some(msg.source);
+                    break; // 🏁 RETURN IMMEDIATELY — don't wait for the rest
+                } else {
+                    errors.push(msg.source);
+                    // Kill failed addon child if any
+                    if let Some(mut child) = msg.child {
+                        let _ = child.kill().await;
+                    }
+                }
+            }
+            Ok(None) => break,
+            Err(_) => {
+                println!("[AddonRace] ⏰ Timeout waiting for first winner");
+                break;
+            }
+        }
+    }
+
+    // ─── Background collector for remaining addons ───────────────────────
+    if responded < addon_count {
+        let remaining_count = addon_count - responded;
+        let deadline_bg = deadline; // reuse same deadline
+        let race_key_bg = race_key.clone();
+        tokio::spawn(async move {
+            let mut collected = 0usize;
+            while collected < remaining_count {
+                let remaining = deadline_bg.saturating_duration_since(tokio::time::Instant::now())
+                    + std::time::Duration::from_secs(5); // Extra grace for background
+                if remaining.is_zero() {
+                    break;
+                }
+                match tokio::time::timeout(remaining, rx.recv()).await {
+                    Ok(Some(msg)) => {
+                        collected += 1;
+                        if msg.source.success {
+                            if let Some(port) = msg.source.proxy_port {
+                                crate::proxy::register_addon_proxy_port(port);
+                                println!("[AddonRace] 🔓 [bg] Whitelisted addon proxy port {}", port);
+                            }
+                            if let Some(child) = msg.child {
+                                let addon_id = msg.source.addon_id.clone();
+                                LIVE_ADDON_CHILDREN.lock().await.insert(addon_id, child);
+                            }
+                            println!(
+                                "[AddonRace] 📥 [bg] Late source: {} ({}ms)",
+                                msg.source.addon_id, msg.source.latency_ms
+                            );
+                            let mut late = RACE_LATE_SOURCES.lock().await;
+                            late.entry(race_key_bg.clone()).or_default().push(msg.source);
+                        } else {
+                            println!(
+                                "[AddonRace] ❌ [bg] Late failure: {} — {}",
+                                msg.source.addon_id,
+                                msg.source.error_message.as_deref().unwrap_or("unknown")
+                            );
+                            if let Some(mut child) = msg.child {
+                                let _ = child.kill().await;
+                            }
+                        }
+                    }
+                    Ok(None) => break,
+                    Err(_) => break,
+                }
+            }
+            println!("[AddonRace] 📦 [bg] Background collection done ({} late sources)", collected);
+        });
+    }
+
+    println!(
+        "[AddonRace] 🏁 Race returning winner in {}ms ({} errors so far)",
+        winner.as_ref().map(|w| w.latency_ms).unwrap_or(0),
+        errors.len()
+    );
+
+    match winner {
+        Some(w) => {
+            let all_sources = vec![w.clone()]; // Just the winner for now; late sources via poll
+            Ok(RaceStreamResult {
+                winner: w,
+                all_sources,
+                errors,
+            })
+        }
+        None => {
+            let msg = errors
+                .iter()
+                .filter_map(|e| e.error_message.as_deref())
+                .collect::<Vec<_>>()
+                .join("; ");
+            Err(if msg.is_empty() {
+                "All addons timed out".to_string()
+            } else {
+                msg
+            })
+        }
+    }
+}
+
+/// Fetch late-arriving sources from the background race collector.
+/// Called by the frontend when the user opens the Sources panel.
+#[tauri::command]
+pub async fn addon_get_race_sources(
+    app: tauri::AppHandle,
+    request: Option<GetRaceSourcesRequest>,
+) -> Result<Vec<AddonStreamSource>, String> {
+    let _ = app;
+    let mut late = RACE_LATE_SOURCES.lock().await;
+
+    if let Some(req) = request {
+        if let (Some(media_type), Some(tmdb_id)) = (req.media_type, req.tmdb_id) {
+            let key = race_key(&media_type, tmdb_id, req.season, req.episode);
+            return Ok(late.remove(&key).unwrap_or_default());
+        }
+    }
+
+    // Backward-compatible fallback: return and clear all late sources if no key is provided.
+    let mut merged = Vec::new();
+    for (_, mut sources) in late.drain() {
+        merged.append(&mut sources);
+    }
+    Ok(merged)
 }
 
 #[tauri::command]

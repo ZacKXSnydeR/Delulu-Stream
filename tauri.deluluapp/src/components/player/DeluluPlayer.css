@@ -991,6 +991,32 @@
     color: #ff4d4d;
 }
 
+/* Source / Audio panel labels */
+.delulu-source-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.delulu-source-label strong {
+    font-weight: 600;
+    font-size: 13px;
+}
+
+.delulu-source-meta {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.4);
+    font-weight: 500;
+    padding: 2px 6px;
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 4px;
+}
+
+.delulu-sources-panel,
+.delulu-audio-panel {
+    min-width: 200px;
+}
+
 /* Subtitle Customization */
 .delulu-subtitle-customize {
     padding: 12px 16px;

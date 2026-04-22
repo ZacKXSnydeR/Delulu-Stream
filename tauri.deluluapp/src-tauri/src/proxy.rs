@@ -48,6 +48,19 @@ use axum::{
 };
 use rquest::Client;
 
+// ═══════════════════════════════════════════════════════════════════════════════
+//  Addon proxy port whitelist — allows the SSRF validator to pass through
+//  requests to localhost:{port} when the port belongs to an addon's embedded proxy.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+static ADDON_PROXY_PORTS: std::sync::LazyLock<std::sync::Mutex<HashSet<u16>>> =
+    std::sync::LazyLock::new(|| std::sync::Mutex::new(HashSet::new()));
+
+/// Register an addon's embedded proxy port so it passes SSRF validation.
+pub fn register_addon_proxy_port(port: u16) {
+    ADDON_PROXY_PORTS.lock().unwrap().insert(port);
+}
+
 /// CDN headers to inject on every proxied request
 #[derive(Default, Clone, Debug)]
 pub struct CdnHeaders {
@@ -820,6 +833,15 @@ fn validate_proxy_target(target_url: &str) -> Result<(), String> {
 
     let host = parsed.host_str().ok_or_else(|| "URL host is required".to_string())?;
     let host_lc = host.to_ascii_lowercase();
+
+    // Allow whitelisted addon proxy ports (e.g. motherbox embedded proxy)
+    if host_lc == "localhost" || host_lc == "127.0.0.1" {
+        let port = parsed.port().unwrap_or(0);
+        if ADDON_PROXY_PORTS.lock().unwrap().contains(&port) {
+            return Ok(()); // Whitelisted addon proxy
+        }
+    }
+
     if host_lc == "localhost" {
         return Err("Localhost targets are blocked".to_string());
     }

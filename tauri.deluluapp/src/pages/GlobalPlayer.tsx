@@ -11,9 +11,45 @@ import { getPosterUrl, getSeasonDetails } from '../services/tmdb';
 import { proxyStreamUrl, probeProxiedHlsManifest, PROXY_SUPERSEDED } from '../utils/hlsProxy';
 import { watchService } from '../services/watchHistory';
 import { appendAdvancedErrorLog } from '../services/advancedLogs';
-import { invalidateCachedMovieStream, invalidateCachedTVStream } from '../services/streamCache';
+import { invalidateCachedMovieStream, invalidateCachedTVStream, type SubtitleTrack } from '../services/streamCache';
 import type { StreamAdapterResult } from '../services/streamAdapter';
 import './PlayerStream.css';
+
+/** Process raw subtitles array from addon response */
+function processSubtitlesFromRaw(rawSubs: Array<{ url: string; language?: string }>): SubtitleTrack[] {
+    return rawSubs
+        .filter((sub) => typeof sub.url === 'string' && sub.url.trim().length > 0)
+        .map((sub) => ({ url: sub.url, language: sub.language || 'Unknown' }));
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null;
+}
+
+function normalizeAudioMap(rawAudios: unknown): Record<string, Record<string, string>> | undefined {
+    if (!isRecord(rawAudios)) return undefined;
+
+    const normalized: Record<string, Record<string, string>> = {};
+    for (const [audioName, audioEntry] of Object.entries(rawAudios)) {
+        if (!isRecord(audioEntry)) continue;
+        const qualitySource = isRecord(audioEntry.streams)
+            ? (audioEntry.streams as Record<string, unknown>)
+            : audioEntry;
+
+        const filteredQualities: Record<string, string> = {};
+        for (const [quality, url] of Object.entries(qualitySource)) {
+            if (typeof url === 'string' && url.trim().length > 0) {
+                filteredQualities[quality] = url;
+            }
+        }
+
+        if (Object.keys(filteredQualities).length > 0) {
+            normalized[audioName] = filteredQualities;
+        }
+    }
+
+    return Object.keys(normalized).length > 0 ? normalized : undefined;
+}
 
 interface NextEpisodeInfo {
     title: string;
@@ -21,6 +57,11 @@ interface NextEpisodeInfo {
     episodeNumber: number;
     episodeName?: string;
     posterUrl?: string;
+}
+
+interface SourceSwitchContext {
+    resumeTime?: number;
+    startPaused?: boolean;
 }
 
 const MANIFEST_RETRY_ATTEMPTS = 3;
@@ -50,6 +91,8 @@ export function GlobalPlayer() {
     const [error, setError] = useState<string | null>(null);
     const [nextEpisode, setNextEpisode] = useState<NextEpisodeInfo | null>(null);
     const [retryKey, setRetryKey] = useState(0);
+    const [switchResumeTime, setSwitchResumeTime] = useState<number | null>(null);
+    const [switchStartPaused, setSwitchStartPaused] = useState(false);
     const [showControls, setShowControls] = useState(true);
     const [isBrowserFullscreen, setIsBrowserFullscreen] = useState(false);
     const frameRef = useRef<HTMLDivElement | null>(null);
@@ -215,7 +258,46 @@ export function GlobalPlayer() {
     const mediaKey = media ? `${media.mediaType}-${media.tmdbId}-${media.season}-${media.episode}` : null;
     useEffect(() => {
         setUpNextPrefetchDisabled(false);
+        setSwitchResumeTime(null);
+        setSwitchStartPaused(false);
     }, [mediaKey]);
+
+    // onReady fires when the video first gets data — we intentionally do NOT
+    // clear switchResumeTime here. Clearing it would flip initialTime back to 0
+    // before the HLS MANIFEST_PARSED handler has a chance to seek the video.
+    // switchResumeTime is already reset by the mediaKey effect when the user
+    // navigates to a different movie/episode.
+    const handlePlayerReady = useCallback(() => {
+        // no-op — intentionally left empty to preserve seek position
+    }, []);
+
+    // Listen for late-arriving addon sources from the background race collector
+    useEffect(() => {
+        const handler = (e: Event) => {
+            const detail = (e as CustomEvent<{ mediaKey?: string; sources?: Array<import('../addon_manager/types').AddonStreamSource> }>).detail;
+            const sources = detail?.sources;
+            if (!Array.isArray(sources) || sources.length === 0) {
+                return;
+            }
+            if (!detail?.mediaKey || detail.mediaKey !== mediaKeyRef.current) {
+                return;
+            }
+
+            setStreamData((prev) => {
+                if (!prev) return prev;
+                const merged = new Map<string, import('../addon_manager/types').AddonStreamSource>();
+                for (const source of prev.allSources || []) {
+                    merged.set(source.addonId, source);
+                }
+                for (const source of sources) {
+                    merged.set(source.addonId, source);
+                }
+                return { ...prev, allSources: Array.from(merged.values()) };
+            });
+        };
+        window.addEventListener('delulu-late-sources', handler);
+        return () => window.removeEventListener('delulu-late-sources', handler);
+    }, []);
 
     useEffect(() => {
         if (!isActive || !type || !id) return;
@@ -251,21 +333,24 @@ export function GlobalPlayer() {
                         continue;
                     }
 
-                    try {
-                        const proxiedUrl = await proxyStreamUrl(
-                            result.streamUrl,
-                            result.headers as Record<string, string> | undefined
-                        );
-                        result = { ...result, streamUrl: proxiedUrl };
-                    } catch (proxyErr) {
-                        if (proxyErr instanceof Error && proxyErr.message === PROXY_SUPERSEDED) {
-                            console.log('[GlobalPlayer] Proxy setup superseded, aborting stale fetch');
-                            return;
+                    // Self-proxy addons (motherbox) handle their own CDN headers — skip app proxy
+                    if (!result.selfProxy) {
+                        try {
+                            const proxiedUrl = await proxyStreamUrl(
+                                result.streamUrl,
+                                result.headers as Record<string, string> | undefined
+                            );
+                            result = { ...result, streamUrl: proxiedUrl };
+                        } catch (proxyErr) {
+                            if (proxyErr instanceof Error && proxyErr.message === PROXY_SUPERSEDED) {
+                                console.log('[GlobalPlayer] Proxy setup superseded, aborting stale fetch');
+                                return;
+                            }
+                            console.error('[GlobalPlayer] Proxy setup failed, aborting playback:', proxyErr);
+                            lastFailure = String(proxyErr);
+                            logAdvancedError('PROXY_SETUP_FAIL', `[attempt ${attempt + 1}] ${lastFailure}`);
+                            continue;
                         }
-                        console.error('[GlobalPlayer] Proxy setup failed, aborting playback:', proxyErr);
-                        lastFailure = String(proxyErr);
-                        logAdvancedError('PROXY_SETUP_FAIL', `[attempt ${attempt + 1}] ${lastFailure}`);
-                        continue;
                     }
 
                     const preparedUrl = result.streamUrl;
@@ -360,34 +445,37 @@ export function GlobalPlayer() {
                 if (!isMounted) return;
 
                 if (result.success && result.streamUrl) {
-                    try {
-                        const proxied = await proxyStreamUrl(
-                            result.streamUrl,
-                            result.headers as Record<string, string> | undefined
-                        );
-                        const prepared = { ...result, streamUrl: proxied };
-                        const shouldProbeManifest = proxied.includes('.m3u8') || proxied.includes('m3u8');
-                        if (shouldProbeManifest) {
-                            const probeOk = await probeProxiedHlsManifest(proxied);
-                            if (!probeOk) {
-                                logAdvancedError('MANIFEST_PROBE_FAIL_RETRY', `Manifest probe failed on retry URL: ${proxied}`);
-                                setError('PLAYBACK_UNAVAILABLE');
+                    let prepared = result;
+                    if (!result.selfProxy) {
+                        try {
+                            const proxied = await proxyStreamUrl(
+                                result.streamUrl,
+                                result.headers as Record<string, string> | undefined
+                            );
+                            prepared = { ...result, streamUrl: proxied };
+                            const shouldProbeManifest = proxied.includes('.m3u8') || proxied.includes('m3u8');
+                            if (shouldProbeManifest) {
+                                const probeOk = await probeProxiedHlsManifest(proxied);
+                                if (!probeOk) {
+                                    logAdvancedError('MANIFEST_PROBE_FAIL_RETRY', `Manifest probe failed on retry URL: ${proxied}`);
+                                    setError('PLAYBACK_UNAVAILABLE');
+                                    setIsLoading(false);
+                                    return;
+                                }
+                            }
+                        } catch (proxyErr) {
+                            if (proxyErr instanceof Error && proxyErr.message === PROXY_SUPERSEDED) {
                                 setIsLoading(false);
                                 return;
                             }
-                        }
-                        setStreamData(prepared);
-                    } catch (proxyErr) {
-                        if (proxyErr instanceof Error && proxyErr.message === PROXY_SUPERSEDED) {
+                            console.error('[GlobalPlayer] Retry proxy setup failed:', proxyErr);
+                            logAdvancedError('PROXY_SETUP_FAIL_RETRY', String(proxyErr));
+                            setError('PLAYBACK_UNAVAILABLE');
                             setIsLoading(false);
                             return;
                         }
-                        console.error('[GlobalPlayer] Retry proxy setup failed:', proxyErr);
-                        logAdvancedError('PROXY_SETUP_FAIL_RETRY', String(proxyErr));
-                        setError('PLAYBACK_UNAVAILABLE');
-                        setIsLoading(false);
-                        return;
                     }
+                    setStreamData(prepared);
                     setRetryKey((k) => k + 1);
                     setIsLoading(false);
                 } else {
@@ -563,21 +651,25 @@ export function GlobalPlayer() {
                     continue;
                 }
 
-                const proxied = await proxyStreamUrl(result.streamUrl, result.headers as Record<string, string> | undefined);
-                if (!isRunActive()) return;
-                const shouldProbeManifest = proxied.includes('.m3u8') || proxied.includes('m3u8');
-                if (shouldProbeManifest) {
-                    const probeOk = await probeProxiedHlsManifest(proxied);
+                let finalUrl = result.streamUrl;
+                if (!result.selfProxy) {
+                    const proxied = await proxyStreamUrl(result.streamUrl, result.headers as Record<string, string> | undefined);
                     if (!isRunActive()) return;
-                    if (!probeOk) {
-                        lastFailure = `Manual retry manifest probe failed for URL: ${proxied}`;
-                        logAdvancedError('MANUAL_RETRY_PROBE_FAIL', `[attempt ${attempt + 1}] ${lastFailure}`);
-                        await invalidateCurrentStreamCache();
-                        continue;
+                    const shouldProbeManifest = proxied.includes('.m3u8') || proxied.includes('m3u8');
+                    if (shouldProbeManifest) {
+                        const probeOk = await probeProxiedHlsManifest(proxied);
+                        if (!isRunActive()) return;
+                        if (!probeOk) {
+                            lastFailure = `Manual retry manifest probe failed for URL: ${proxied}`;
+                            logAdvancedError('MANUAL_RETRY_PROBE_FAIL', `[attempt ${attempt + 1}] ${lastFailure}`);
+                            await invalidateCurrentStreamCache();
+                            continue;
+                        }
                     }
+                    finalUrl = proxied;
                 }
 
-                setStreamData({ ...result, streamUrl: proxied });
+                setStreamData({ ...result, streamUrl: finalUrl });
                 setRetryKey((k) => k + 1);
                 setIsLoading(false);
                 return;
@@ -603,6 +695,64 @@ export function GlobalPlayer() {
             closePlayer();
         });
     }, [closePlayer, syncProgressNow, persistEpisodeSelectionNow, runAfterVideoFullscreenExit]);
+
+    /** Switch to a different addon source (from the Sources panel in the player) */
+    const handleSourceSwitch = useCallback(async (
+        source: import('../addon_manager/types').AddonStreamSource,
+        context?: SourceSwitchContext,
+    ) => {
+        if (typeof source.streamUrl !== 'string' || source.streamUrl.trim().length === 0) {
+            logAdvancedError('SOURCE_SWITCH_INVALID_URL', `Invalid stream URL for source ${source.addonId}`);
+            return;
+        }
+
+        if (typeof context?.resumeTime === 'number' && Number.isFinite(context.resumeTime)) {
+            setSwitchResumeTime(Math.max(0, context.resumeTime));
+        } else {
+            setSwitchResumeTime(null);
+        }
+        setSwitchStartPaused(Boolean(context?.startPaused));
+
+        setIsLoading(true);
+        setError(null);
+
+        try {
+            const subtitles = processSubtitlesFromRaw(
+                (source.subtitles || []) as Array<{ url: string; language?: string }>,
+            );
+
+            let finalUrl = source.streamUrl;
+            const headers = source.selfProxy ? {} : (source.headers || {});
+
+            if (!source.selfProxy) {
+                finalUrl = await proxyStreamUrl(
+                    source.streamUrl,
+                    headers as Record<string, string> | undefined,
+                );
+            }
+
+            setStreamData({
+                success: true,
+                streamUrl: finalUrl,
+                headers,
+                subtitles,
+                allSources: streamData?.allSources,
+                sourceAddonId: source.addonId,
+                sourceAddonName: source.addonName,
+                audios: normalizeAudioMap(source.audios),
+                proxyPort: source.proxyPort,
+                sessionId: source.sessionId,
+                selfProxy: source.selfProxy,
+            });
+            setRetryKey((k) => k + 1);
+        } catch (err) {
+            console.error('[GlobalPlayer] Source switch failed:', err);
+            logAdvancedError('SOURCE_SWITCH_FAIL', String(err));
+            setError('PLAYBACK_UNAVAILABLE');
+        } finally {
+            setIsLoading(false);
+        }
+    }, [streamData?.allSources, logAdvancedError]);
 
     const handleCancel = handleCloseToDetails;
 
@@ -826,7 +976,9 @@ export function GlobalPlayer() {
                     onBack={handleCloseToDetails}
                     showQualitySelector
                     videoRef={videoRef}
-                    initialTime={initialTime}
+                    initialTime={switchResumeTime ?? initialTime}
+                    startPaused={switchStartPaused}
+                    onReady={handlePlayerReady}
                     tmdbId={parsedTmdbId}
                     mediaType={type}
                     seasonNumber={type === 'tv' ? season : undefined}
@@ -836,6 +988,12 @@ export function GlobalPlayer() {
                     isActive={isActive && !isMini}
                     reloadToken={retryKey}
                     onControlsVisibilityChange={setShowControls}
+                    allSources={streamData.allSources}
+                    audios={streamData.audios}
+                    sourceAddonId={streamData.sourceAddonId}
+                    sourceAddonName={streamData.sourceAddonName}
+                    selfProxy={streamData.selfProxy}
+                    onSourceSwitch={handleSourceSwitch}
                 />
 
                 {isMini && (

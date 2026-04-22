@@ -783,3 +783,54 @@ export async function getTrailer(
     return youtubeVideos[0] || null;
 }
 
+const detailPrefetchTimestamps = new Map<string, number>();
+const DETAIL_PREFETCH_COOLDOWN_MS = 3 * 60 * 1000;
+
+/**
+ * Warm the TMDB in-memory cache for the Details route before navigation.
+ * This is intentionally fire-and-forget to avoid blocking UI interactions.
+ */
+export function prefetchDetailsBundle(type: 'movie' | 'tv', id: number): void {
+    const key = `${type}-${id}`;
+    const now = Date.now();
+    const lastPrefetch = detailPrefetchTimestamps.get(key);
+
+    if (lastPrefetch && now - lastPrefetch < DETAIL_PREFETCH_COOLDOWN_MS) {
+        return;
+    }
+
+    detailPrefetchTimestamps.set(key, now);
+
+    if (type === 'movie') {
+        void Promise.all([
+            getMovieDetails(id),
+            getCredits('movie', id),
+            getTrailer(id, 'movie'),
+            getMovieReleaseDates(id),
+        ]).catch(() => {
+            // Silent failure: prefetch is opportunistic only.
+        });
+        return;
+    }
+
+    void Promise.all([
+        getTVShowDetails(id),
+        getCredits('tv', id),
+        getTrailer(id, 'tv'),
+    ])
+        .then(([showDetails]) => {
+            const firstPlayableSeason = showDetails.seasons
+                ?.filter((season) => season.episode_count > 0)
+                .sort((a, b) => a.season_number - b.season_number)[0];
+
+            if (firstPlayableSeason) {
+                void getSeasonDetails(id, firstPlayableSeason.season_number).catch(() => {
+                    // Silent failure: prefetch is opportunistic only.
+                });
+            }
+        })
+        .catch(() => {
+            // Silent failure: prefetch is opportunistic only.
+        });
+}
+

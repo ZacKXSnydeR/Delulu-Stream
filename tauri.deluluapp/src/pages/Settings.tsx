@@ -93,7 +93,6 @@ export function Settings() {
 
     // Error Logs
     const [errorLogs, setErrorLogs] = useState<AdvancedErrorLogEntry[]>([]);
-    const [activeAddonName, setActiveAddonName] = useState<string>('Not selected');
     const [activeAddonId, setActiveAddonId] = useState<string>('none');
     const [installedAddons, setInstalledAddons] = useState<AddonInstallRecord[]>([]);
     const [catalogEntries, setCatalogEntries] = useState<CatalogAddonEntry[]>([]);
@@ -147,7 +146,6 @@ export function Settings() {
 
     const hydrateAddonState = (store: AddonStateStore) => {
         const active = getActiveAddonRecord(store);
-        setActiveAddonName(active?.manifest.name ?? 'Not selected');
         setActiveAddonId(active?.manifest.id ?? 'none');
         setInstalledAddons(store.addons);
     };
@@ -238,24 +236,6 @@ export function Settings() {
         } finally {
             setAddonBusy(false);
             setIsInstallingFile(false);
-        }
-    };
-
-    const handleSelectAddon = async (addonId: string) => {
-        setAddonErr('');
-        setAddonMsg('');
-        setAddonBusy(true);
-        try {
-            const store = await setActiveAddonById(addonId);
-            hydrateAddonState(store);
-            const active = getActiveAddonRecord(store);
-            setAddonMsg(`Active addon: ${active?.manifest.name ?? addonId}`);
-            setTimeout(() => setAddonMsg(''), 2800);
-        } catch (err) {
-            setAddonErr(normalizeAddonError(err, 'Failed to activate addon'));
-            setTimeout(() => setAddonErr(''), 4500);
-        } finally {
-            setAddonBusy(false);
         }
     };
 
@@ -577,7 +557,6 @@ export function Settings() {
                                 <h3 className="section-title">Binary Add-on Manager</h3>
                                 <div className="settings-card" style={{ marginBottom: '32px' }}>
                                     <div className="addon-manager-header">
-                                        <p className="engine-note">Active Binary Add-on: <strong style={{ color: '#fff' }}>{activeAddonName}</strong></p>
                                         <button className="btn-primary addon-install-btn" onClick={handleInstallAddonClick} disabled={addonBusy}>
                                             {isInstallingFile ? (
                                                 <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><span className="spinner-small" /> Installing...</span>
@@ -637,9 +616,8 @@ export function Settings() {
                                         <div className="addon-list">
                                             {installedAddons.map((record) => {
                                                 const addon = record.manifest;
-                                                const isActive = addon.id === activeAddonId && record.installState === 'ready';
                                                 return (
-                                                    <div key={addon.id} className={`addon-item ${isActive ? 'addon-item-active' : ''}`}>
+                                                    <div key={addon.id} className="addon-item">
                                                         <div className="addon-item-meta">
                                                         <div className="addon-item-title-row">
                                                             <h4 className="addon-item-name">{addon.name}</h4>
@@ -653,7 +631,6 @@ export function Settings() {
                                                         {record.lastError && <p className="message-error" style={{ marginTop: '8px' }}>{record.lastError}</p>}
                                                     </div>
                                                     <div className="addon-item-actions">
-                                                        <button className="btn-secondary-subtle" onClick={() => { void handleSelectAddon(addon.id); }} disabled={isActive}>{isActive ? 'Active' : 'Set Active'}</button>
                                                         <button
                                                             className="btn-secondary-subtle"
                                                             onClick={() => { void handleHealthCheckByAddon(addon.id, addon.name); }}

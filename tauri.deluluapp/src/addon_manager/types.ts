@@ -86,6 +86,34 @@ export interface AddonHealthStatus {
   error?: string;
 }
 
+/** Result from a single addon in the parallel race */
+export interface AddonStreamSource {
+  addonId: string;
+  addonName: string;
+  success: boolean;
+  streamUrl?: string;
+  headers?: Record<string, string>;
+  subtitles?: Array<{ url: string; language?: string }>;
+  /** Multi-audio map: { audioName: { quality: url } } */
+  audios?: Record<string, Record<string, string>>;
+  /** Embedded proxy port (127.0.0.1:port) */
+  proxyPort?: number;
+  /** Session ID for the embedded proxy */
+  sessionId?: string;
+  /** When true, addon handles its own proxying — app should NOT inject CDN headers */
+  selfProxy?: boolean;
+  errorCode?: string;
+  errorMessage?: string;
+  latencyMs: number;
+}
+
+/** Race result: first winner + all sources for source switching */
+export interface RaceStreamResult {
+  winner: AddonStreamSource;
+  allSources: AddonStreamSource[];
+  errors: AddonStreamSource[];
+}
+
 export interface AddonVerificationResult {
   ok: boolean;
   error?: string;
