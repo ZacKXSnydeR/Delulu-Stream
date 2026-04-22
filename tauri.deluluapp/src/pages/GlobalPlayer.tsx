@@ -59,6 +59,11 @@ interface NextEpisodeInfo {
     posterUrl?: string;
 }
 
+interface SourceSwitchContext {
+    resumeTime?: number;
+    startPaused?: boolean;
+}
+
 const MANIFEST_RETRY_ATTEMPTS = 3;
 
 export function GlobalPlayer() {
@@ -86,6 +91,8 @@ export function GlobalPlayer() {
     const [error, setError] = useState<string | null>(null);
     const [nextEpisode, setNextEpisode] = useState<NextEpisodeInfo | null>(null);
     const [retryKey, setRetryKey] = useState(0);
+    const [switchResumeTime, setSwitchResumeTime] = useState<number | null>(null);
+    const [switchStartPaused, setSwitchStartPaused] = useState(false);
     const [showControls, setShowControls] = useState(true);
     const [isBrowserFullscreen, setIsBrowserFullscreen] = useState(false);
     const frameRef = useRef<HTMLDivElement | null>(null);
@@ -251,7 +258,18 @@ export function GlobalPlayer() {
     const mediaKey = media ? `${media.mediaType}-${media.tmdbId}-${media.season}-${media.episode}` : null;
     useEffect(() => {
         setUpNextPrefetchDisabled(false);
+        setSwitchResumeTime(null);
+        setSwitchStartPaused(false);
     }, [mediaKey]);
+
+    // onReady fires when the video first gets data — we intentionally do NOT
+    // clear switchResumeTime here. Clearing it would flip initialTime back to 0
+    // before the HLS MANIFEST_PARSED handler has a chance to seek the video.
+    // switchResumeTime is already reset by the mediaKey effect when the user
+    // navigates to a different movie/episode.
+    const handlePlayerReady = useCallback(() => {
+        // no-op — intentionally left empty to preserve seek position
+    }, []);
 
     // Listen for late-arriving addon sources from the background race collector
     useEffect(() => {
@@ -679,11 +697,22 @@ export function GlobalPlayer() {
     }, [closePlayer, syncProgressNow, persistEpisodeSelectionNow, runAfterVideoFullscreenExit]);
 
     /** Switch to a different addon source (from the Sources panel in the player) */
-    const handleSourceSwitch = useCallback(async (source: import('../addon_manager/types').AddonStreamSource) => {
+    const handleSourceSwitch = useCallback(async (
+        source: import('../addon_manager/types').AddonStreamSource,
+        context?: SourceSwitchContext,
+    ) => {
         if (typeof source.streamUrl !== 'string' || source.streamUrl.trim().length === 0) {
             logAdvancedError('SOURCE_SWITCH_INVALID_URL', `Invalid stream URL for source ${source.addonId}`);
             return;
         }
+
+        if (typeof context?.resumeTime === 'number' && Number.isFinite(context.resumeTime)) {
+            setSwitchResumeTime(Math.max(0, context.resumeTime));
+        } else {
+            setSwitchResumeTime(null);
+        }
+        setSwitchStartPaused(Boolean(context?.startPaused));
+
         setIsLoading(true);
         setError(null);
 
@@ -947,7 +976,9 @@ export function GlobalPlayer() {
                     onBack={handleCloseToDetails}
                     showQualitySelector
                     videoRef={videoRef}
-                    initialTime={initialTime}
+                    initialTime={switchResumeTime ?? initialTime}
+                    startPaused={switchStartPaused}
+                    onReady={handlePlayerReady}
                     tmdbId={parsedTmdbId}
                     mediaType={type}
                     seasonNumber={type === 'tv' ? season : undefined}

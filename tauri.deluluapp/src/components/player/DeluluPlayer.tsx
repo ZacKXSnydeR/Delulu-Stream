@@ -104,6 +104,7 @@ interface DeluluPlayerProps {
     onReady?: () => void;
     onFatalError?: (type: string, details: string) => void;
     initialTime?: number;
+    startPaused?: boolean;
     videoRef?: MutableRefObject<HTMLVideoElement | null>;
     showQualitySelector?: boolean;
     headers?: {
@@ -155,6 +156,9 @@ interface DeluluPlayerProps {
         sessionId?: string;
         selfProxy?: boolean;
         latencyMs: number;
+    }, context?: {
+        resumeTime?: number;
+        startPaused?: boolean;
     }) => void;
 }
 
@@ -275,6 +279,7 @@ export function DeluluPlayer({
     onReady,
     onFatalError,
     initialTime = 0,
+    startPaused = false,
     videoRef: externalVideoRef,
     showQualitySelector = true,
     headers,
@@ -313,6 +318,13 @@ export function DeluluPlayer({
     const activeLoadSessionRef = useRef(0);
     const volumeHudTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const seekHudTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    // Keep latest initialTime / startPaused in refs so the HLS load effect
+    // can read them without listing them as dependencies (which would destroy
+    // and recreate HLS — resetting the position — whenever they change).
+    const initialTimeRef = useRef(initialTime);
+    const startPausedRef = useRef(startPaused);
+    useEffect(() => { initialTimeRef.current = initialTime; }, [initialTime]);
+    useEffect(() => { startPausedRef.current = startPaused; }, [startPaused]);
 
     const [isPlaying, setIsPlaying] = useState(false);
     const [isEnded, setIsEnded] = useState(false);
@@ -601,13 +613,18 @@ export function DeluluPlayer({
         readyNotifiedRef.current = false;
         networkRecoveryAttemptsRef.current = 0;
         mediaRecoveryAttemptsRef.current = 0;
+        // Snapshot seek/pause intent at the moment this load fires.
+        // We read from refs so that changes to initialTime/startPaused props
+        // do NOT re-run this effect and destroy the HLS instance.
+        const seekTo = initialTimeRef.current;
+        const pauseAfterLoad = startPausedRef.current;
         const isM3U8 = src.includes('.m3u8') || src.includes('m3u8');
         if (isM3U8 && Hls.isSupported()) {
             setIsHLS(true);
             const hls = new Hls({
                 enableWorker: true,
                 lowLatencyMode: false,
-                startPosition: initialTime > 0 ? initialTime : -1,
+                startPosition: seekTo > 0 ? seekTo : -1,
                 backBufferLength: 90,
                 maxBufferLength: 90,
                 maxMaxBufferLength: 180,
@@ -641,8 +658,12 @@ export function DeluluPlayer({
                     hls.loadLevel = highest.index;
                     hls.nextLoadLevel = highest.index;
                 }
-                if (initialTime > 0) video.currentTime = initialTime;
-                video.play().catch(console.error);
+                if (seekTo > 0) video.currentTime = seekTo;
+                if (!pauseAfterLoad) {
+                    video.play().catch(console.error);
+                } else {
+                    video.pause();
+                }
             });
             const handleHlsError = (_event: unknown, data: {
                 fatal: boolean;
@@ -687,20 +708,29 @@ export function DeluluPlayer({
             setIsHLS(true);
             video.src = src;
             video.load();
-            if (initialTime > 0) video.currentTime = initialTime;
-            video.play().catch((e) => console.warn('[DeluluPlayer] Native HLS autoplay suppressed:', e));
+            if (seekTo > 0) video.currentTime = seekTo;
+            if (!pauseAfterLoad) {
+                video.play().catch((e) => console.warn('[DeluluPlayer] Native HLS autoplay suppressed:', e));
+            } else {
+                video.pause();
+            }
         } else {
             // Direct video (MP4, self-proxy stream URL, etc.)
             setIsHLS(false);
             video.src = src;
             video.load();
-            if (initialTime > 0) video.currentTime = initialTime;
-            video.play().catch((e) => console.warn('[DeluluPlayer] Direct video autoplay suppressed:', e));
+            if (seekTo > 0) video.currentTime = seekTo;
+            if (!pauseAfterLoad) {
+                video.play().catch((e) => console.warn('[DeluluPlayer] Direct video autoplay suppressed:', e));
+            } else {
+                video.pause();
+            }
         }
         return () => {
             disposed = true;
         };
-    }, [src, headers, initialTime, reloadToken]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [src, headers, reloadToken]);
 
     useEffect(() => {
         const video = videoRef.current;
@@ -1004,6 +1034,36 @@ export function DeluluPlayer({
         if (index < 0) writeSubtitlePrefs({ ...(readSubtitlePrefs() || {}), enabled: false, sourceKey: undefined, settings: subtitleSettings });
         else if (subtitles[index]) writeSubtitlePrefs({ ...(readSubtitlePrefs() || {}), enabled: true, languageKey: makeLanguageKey(subtitles[index]), sourceKey: makeSourceKey(subtitles[index].src), settings: subtitleSettings });
     };
+
+    const buildSwitchContext = useCallback(() => {
+        const video = videoRef.current;
+        const resumeTime = video && Number.isFinite(video.currentTime)
+            ? Math.max(0, video.currentTime)
+            : 0;
+        const shouldStartPaused = Boolean(video?.paused);
+
+        if (activeSubtitle >= 0 && subtitles[activeSubtitle]) {
+            writeSubtitlePrefs({
+                ...(readSubtitlePrefs() || {}),
+                enabled: true,
+                languageKey: makeLanguageKey(subtitles[activeSubtitle]),
+                sourceKey: undefined,
+                settings: subtitleSettings,
+            });
+        } else {
+            writeSubtitlePrefs({
+                ...(readSubtitlePrefs() || {}),
+                enabled: false,
+                sourceKey: undefined,
+                settings: subtitleSettings,
+            });
+        }
+
+        return {
+            resumeTime,
+            startPaused: shouldStartPaused,
+        };
+    }, [videoRef, activeSubtitle, subtitles, subtitleSettings]);
 
     const completionThreshold = 0.95;
     const shouldShowNextEpisodeCta = Boolean(isSeries && nextEpisode && onPlayNextEpisode && (isEnded || (!isPlaying && duration > 0 && (currentTime / duration) >= completionThreshold)));
@@ -1346,7 +1406,7 @@ export function DeluluPlayer({
                                     className={`delulu-option ${isActive ? 'active' : ''}`}
                                     onClick={() => {
                                         if (!isActive && onSourceSwitch) {
-                                            onSourceSwitch(source);
+                                            onSourceSwitch(source, buildSwitchContext());
                                             setShowSourcesPanel(false);
                                         }
                                     }}
@@ -1377,7 +1437,7 @@ export function DeluluPlayer({
                                         if (!isPlaying && onSourceSwitch && sourceAddonId) {
                                             const currentSource = allSources?.find(s => s.addonId === sourceAddonId);
                                             if (currentSource) {
-                                                onSourceSwitch({ ...currentSource, streamUrl: bestUrl });
+                                                onSourceSwitch({ ...currentSource, streamUrl: bestUrl }, buildSwitchContext());
                                                 setShowAudioPanel(false);
                                             }
                                         }
