@@ -14,15 +14,6 @@
 
 ---
 
-## 📸 Interface Showcase
-
-<div align="center">
-  <img src="Screenshots/home.png" width="49%" />
-  <img src="Screenshots/playerpage.png" width="49%" />
-</div>
-
----
-
 ## 🏛️ Architecture & Philosophy
 
 DeluluStream is engineered as a **Modular Middleware Shell**. It follows a strict separation of concerns between the user interface and content logic. The core application is entirely stateless and does not contain any built-in media providers, search indices, or content-sourcing logic.
